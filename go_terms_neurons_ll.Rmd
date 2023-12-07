@@ -1,0 +1,304 @@
+---
+title: "go_terms_Neuron"
+author: "T Attenborough"
+date: "2023-10-11"
+output: html_document
+---
+
+Load packages
+```{r}
+library(Seurat) #Seurat v4.0.2
+library(dplyr)
+library(patchwork)
+library(here)
+library(ggplot2)
+library(clustree)
+library(ggrepel)
+library(SeuratDisk)
+library(ggpubr)
+library(RVenn)
+library(readxl)
+library(data.table)
+library(UpSetR)
+library(pheatmap)
+#sessionInfo()
+
+```
+
+Import miracidia 
+```{r}
+miracidia_df <- read.csv("/Users/ta13/R_git/filtered_v10_miracidia/v10_GO_genelists/topGO_summary_miracidia_onv10.csv", stringsAsFactors = FALSE, header = TRUE) #import the marker data from somule papaer
+```
+
+```{r}
+miracidia_neuron <- miracidia_df[miracidia_df$Cell.type=='Neuron 1' | miracidia_df$Cell.type=='Neuron 2' | miracidia_df$Cell.type=='Neuron 3' | miracidia_df$Cell.type=='Neuron 5' | miracidia_df$Cell.type=='Neuron 6' ,]
+miracidia_neuron
+```
+
+oImport sporocyst 
+```{r}
+sporocysts_df <- read.csv("/Users/ta13/R_git/topgo_tutorial/sporo_longlist_0.7/topGO_grouped_longlist_0.7_withCC.csv", stringsAsFactors = FALSE, header = TRUE) #import the marker data from somule papaer
+
+sporocyst_neuron <- sporocysts_df[sporocysts_df$Cell.type=='Neuron' ,]
+sporocyst_neuron
+```
+
+Import somules 
+```{r}
+somules_df <- read.csv("/Users/ta13/R_tutorials/sporocysts/GO_terms_extracted_SuppFig2_nomotor.csv", stringsAsFactors = FALSE, header = TRUE) #import the marker data from somule papaer
+
+somule_neuron <-  somules_df[somules_df$Cell.cluster=='gnai+ neurons' | somules_df$Cell.cluster=='7b2/pc2+ neurons'| somules_df$Cell.cluster=='ndf+ neurons' | somules_df$Cell.cluster=='Sm-kk7+ neurons' ,]
+somule_neuron
+```
+
+Import the adult go term doc
+```{r}
+my_path <- "/Users/ta13/R_tutorials/sporocysts/adult_goterms_collins.xlsx"
+
+sheets <- readxl::excel_sheets(my_path)
+
+
+collins_adults_list <- list()
+
+for(i in seq_along(sheets)) {
+  collins_adults_list[[i]] <- read_excel(my_path, sheet = sheets[[i]])
+}
+
+names(collins_adults_list) <- sheets
+
+sheets
+nrow(collins_adults_list[["GO terms"]])
+
+no_data <- c()
+
+for (i in sheets) {
+  if (nrow(collins_adults_list[[i]]) < 1) {
+    no_data[[i]] <- FALSE
+  } else {
+    no_data[[i]] <- TRUE
+  }
+}
+
+no_data <- as.logical(no_data)
+
+collins_adults_list <- collins_adults_list[no_data]
+
+collins_adults_df <- data.table::rbindlist(collins_adults_list)
+
+```
+
+```{r}
+adult_neuron1 <- collins_adults_list$`neuron 1`
+adult_neuron2 <- collins_adults_list$`neuron 2`
+adult_neuron3 <- collins_adults_list$`neuron 3`
+adult_neuron4 <- collins_adults_list$`neuron 4`
+adult_neuron5 <- collins_adults_list$`neuron 5`
+adult_neuron6 <- collins_adults_list$`neuron 6`
+adult_neuron7 <- collins_adults_list$`neuron 7`
+adult_neuron8 <- collins_adults_list$`neuron 8`
+adult_neuron9 <- collins_adults_list$`neuron 9`
+adult_neuron10 <- collins_adults_list$`neuron 10`
+adult_neuron11 <- collins_adults_list$`neuron 11`
+adult_neuron12 <- collins_adults_list$`neuron 12`
+adult_neuron13 <- collins_adults_list$`neuron 13`
+adult_neuron14 <- collins_adults_list$`neuron 14`
+adult_neuron15 <- collins_adults_list$`neuron 15`
+adult_neuron16 <- collins_adults_list$`neuron 16`
+adult_neuron17 <- collins_adults_list$`neuron 17`
+adult_neuron18 <- collins_adults_list$`neuron 18`
+adult_neuron19 <- collins_adults_list$`neuron 19`
+adult_neuron20 <- collins_adults_list$`neuron 20`
+adult_neuron21 <- collins_adults_list$`neuron 21`
+adult_neuron22 <- collins_adults_list$`neuron 22`
+adult_neuron23 <- collins_adults_list$`neuron 23`
+adult_neuron24 <- collins_adults_list$`neuron 24`
+adult_neuron25 <- collins_adults_list$`neuron 25`
+adult_neuron26 <- collins_adults_list$`neuron 26`
+adult_neuron27 <- collins_adults_list$`neuron 27`
+adult_neuron28 <- collins_adults_list$`neuron 28`
+adult_neuron29 <- collins_adults_list$`neuron 29`
+adult_neuron30 <- collins_adults_list$`neuron 30`
+adult_neuron31 <- collins_adults_list$`neuron 31 (7b2-)`
+
+adult_neuron_ALL <- rbind(adult_neuron1, adult_neuron2, adult_neuron3, adult_neuron4, adult_neuron5, adult_neuron6, adult_neuron7, adult_neuron8, adult_neuron9, adult_neuron10, adult_neuron11, adult_neuron12, adult_neuron13, adult_neuron14, adult_neuron15, adult_neuron16, adult_neuron17, adult_neuron18, adult_neuron19, adult_neuron20, adult_neuron21, adult_neuron22, adult_neuron23, adult_neuron24, adult_neuron25, adult_neuron26, adult_neuron27, adult_neuron28, adult_neuron29, adult_neuron30, adult_neuron31)
+
+```
+
+Make a heatmap
+```{r}
+venn = Venn(list(miracidia_neuron$GO.ID, sporocyst_neuron$GO.ID, somule_neuron$GO.Accession, adult_neuron_ALL$term_id))
+print(venn)
+
+venn@names <- c("Miracidia Neuron", "Sporocyst Neuron", "Somule Neuron", "Adult Neuron")
+print(venn)
+```
+
+```{r}
+names(venn@sets) <- c("Miracidia Neuron","Sporocyst Neuron", "Somule Neuron", "Adult Neuron")
+
+pdf("GO_compara/first_mira_sporo_somule_adult_compare_Neuron_0.7s.pdf", width = 8, height = 15)
+p1 = setmap(venn, slice = "all", element_clustering = TRUE,
+  set_clustering = FALSE, method = "average", legend = TRUE,
+  title = NA, element_fontsize = 8, set_fontsize = 10)
+
+
+p1
+# Close the pdf file
+dev.off()
+```
+
+Need to filter the four dataframes to min 2 terms 
+```{r}
+library(stringr)
+
+miracidia_Neuron_2genes <- miracidia_neuron %>%
+  filter(str_detect(genes, ","))
+sporocyst_Neuron_2genes <- sporocyst_neuron %>%
+  filter(str_detect(genes, ","))
+adult_Neuron_2genes <- adult_neuron_ALL %>%
+  filter(str_detect(intersections, ","))
+```
+
+```{r}
+venn = Venn(list(miracidia_Neuron_2genes$Term, sporocyst_Neuron_2genes$Term, somule_neuron$GO.name, adult_Neuron_2genes$term_name))
+print(venn)
+
+venn@names <- c("Miracidia Neuron", "Sporocyst Neuron", "Somule Neuron", "Adult Neuron")
+print(venn)
+names(venn@sets) <- c("Miracidia Neuron","Sporocyst Neuron", "Somule Neuron", "Adult Neuron")
+pdf("GO_compara/stringent_2genes_mira_sporo_somule_adult_compare_Neuron_0.7s.pdf", width = 8, height = 6)
+p10 = setmap(venn, slice = "all", element_clustering = TRUE,
+  set_clustering = FALSE, method = "average", legend = TRUE,
+  title = NA, element_fontsize = 8, set_fontsize = 10)
+
+p10
+# Close the pdf file
+dev.off()
+```
+
+
+and only BP
+Filter miracidia
+```{r}
+library(stringr)
+
+miracidia_Neuron_BPonly_2genes <- miracidia_Neuron_2genes %>%
+  filter(str_detect(Type, "BP"))
+```
+
+```{r}
+sporocyst_Neuron_BPonly_2genes <- sporocyst_Neuron_2genes %>%
+  filter(str_detect(Type, "BP"))
+```
+
+```{r}
+somule_Neuron_BPonly <- somule_neuron %>%
+  filter(str_detect(Ontology, "biological_process"))
+```
+
+```{r}
+adult_Neuron_BPonly_2genes <- adult_Neuron_2genes %>%
+  filter(str_detect(source, "GO:BP"))
+```
+
+```{r}
+venn = Venn(list(miracidia_Neuron_BPonly_2genes$GO.ID, sporocyst_Neuron_BPonly_2genes$GO.ID, somule_Neuron_BPonly$GO.Accession, adult_Neuron_BPonly_2genes$term_id))
+print(venn)
+
+venn@names <- c("Miracidia Neuron", "Sporocyst Neuron", "Somule Neuron", "Adult Neuron")
+print(venn)
+names(venn@sets) <- c("Miracidia Neuron","Sporocyst Neuron", "Somule Neuron", "Adult Neuron")
+pdf("GO_compara/stringent_2genes_BPonly_mira_sporo_somule_adult_compare_Neuron_0.7s.pdf", width = 8, height = 6)
+p10 = setmap(venn, slice = "all", element_clustering = TRUE,
+  set_clustering = FALSE, method = "average", legend = TRUE,
+  title = NA, element_fontsize = 8, set_fontsize = 10)
+
+p10
+# Close the pdf file
+dev.off()
+```
+
+```{r}
+venn = Venn(list(miracidia_Neuron_BPonly_2genes$Term, sporocyst_Neuron_BPonly_2genes$Term, somule_Neuron_BPonly$GO.name, adult_Neuron_BPonly_2genes$term_name))
+print(venn)
+
+venn@names <- c("Miracidia Neuron", "Sporocyst Neuron", "Somule Neuron", "Adult Neuron")
+print(venn)
+names(venn@sets) <- c("Miracidia Neuron","Sporocyst Neuron", "Somule Neuron", "Adult Neuron")
+pdf("GO_compara/stringent_BPonly_mira_sporo_somule_adult_compare_Neuron_0.7s_names.pdf", width = 8, height = 6)
+p10 = setmap(venn, slice = "all", element_clustering = TRUE,
+  set_clustering = FALSE, method = "average", legend = TRUE,
+  title = NA, element_fontsize = 8, set_fontsize = 10)
+
+p10
+# Close the pdf file
+dev.off()
+```
+
+```{r}
+adult_Neuron_BPonly_2genes$stage <- 'adult'
+adult_Neuron_BPonly_2genes$tissue <- 'neuron'
+somule_Neuron_BPonly$stage <- 'schistosomula'
+somule_Neuron_BPonly$tissue <- 'neuron'
+sporocyst_Neuron_BPonly_2genes$stage <- 'sporocyst'
+sporocyst_Neuron_BPonly_2genes$tissue <- 'neuron'
+miracidia_Neuron_BPonly_2genes$stage <- 'miracidia'
+miracidia_Neuron_BPonly_2genes$tissue <- 'neuron'
+```
+
+```{r}
+adult_Neuron_BPonly_2genes <- adult_Neuron_BPonly_2genes %>% 
+        rename("Term" = "term_name",
+               "GO.ID" = "term_id",
+               "genes" = "intersections",
+               "Type" = "source")
+
+somule_Neuron_BPonly <- somule_Neuron_BPonly %>% 
+        rename("Term" = "GO.name",
+               "GO.ID" = "GO.Accession",
+               "Type" = "Ontology",
+               "Cell.type" = "Cell.cluster")
+```
+
+
+Need to add together the df, rbind or similar with specifed col names as they vary?
+```{r}
+all_Neuron <- bind_rows(adult_Neuron_BPonly_2genes,somule_Neuron_BPonly,sporocyst_Neuron_BPonly_2genes,miracidia_Neuron_BPonly_2genes)
+
+all_Neuron <- all_Neuron %>% select(Term, GO.ID,genes,Type,Cell.type,stage,tissue)
+write.csv(x=all_Neuron, file="GO_compara/mira_sporo_somule_adult_compare_Neuron_stringent_BP.csv")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

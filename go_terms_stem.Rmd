@@ -1,0 +1,287 @@
+---
+title: "go_terms_stem"
+author: "T Attenborough"
+date: "2023-10-11"
+output: html_document
+---
+
+Load packages
+```{r}
+library(Seurat) #Seurat v4.0.2
+library(dplyr)
+library(patchwork)
+library(here)
+library(ggplot2)
+library(clustree)
+library(ggrepel)
+library(SeuratDisk)
+library(ggpubr)
+library(RVenn)
+library(readxl)
+library(data.table)
+library(UpSetR)
+library(pheatmap)
+#sessionInfo()
+
+```
+
+Import miracidia 
+```{r}
+miracidia_df <- read.csv("/Users/ta13/R_git/filtered_v10_miracidia/v10_GO_genelists/topGO_summary_miracidia_onv10.csv", stringsAsFactors = FALSE, header = TRUE) #import the marker data from somule papaer
+```
+
+```{r}
+miracidia_stem <- miracidia_df[miracidia_df$Cell.type=='Stem A' | miracidia_df$Cell.type=='Stem B' | miracidia_df$Cell.type=='Stem C' | miracidia_df$Cell.type=='Stem D' | miracidia_df$Cell.type=='Stem E' | miracidia_df$Cell.type=='Stem G' ,]
+miracidia_stem
+```
+
+oImport sporocyst 
+```{r}
+sporocysts_df <- read.csv("/Users/ta13/R_git/topgo_tutorial/sporo_longlist_0.7/topGO_grouped_longlist_0.7_withCC.csv", stringsAsFactors = FALSE, header = TRUE) #import the marker data from somule papaer
+
+sporocyst_stem <- sporocysts_df[sporocysts_df$Cell.type=='Stem/germinal' ,]
+sporocyst_stem
+```
+
+Import somules 
+```{r}
+somules_df <- read.csv("/Users/ta13/R_tutorials/sporocysts/GO_terms_extracted_SuppFig2_nomotor.csv", stringsAsFactors = FALSE, header = TRUE) #import the marker data from somule papaer
+
+somule_stem <-  somules_df[somules_df$Cell.cluster=='stem/germinal',]
+somule_stem
+```
+
+Import the adult go term doc
+```{r}
+my_path <- "/Users/ta13/R_tutorials/sporocysts/adult_goterms_collins.xlsx"
+
+sheets <- readxl::excel_sheets(my_path)
+
+
+collins_adults_list <- list()
+
+for(i in seq_along(sheets)) {
+  collins_adults_list[[i]] <- read_excel(my_path, sheet = sheets[[i]])
+}
+
+names(collins_adults_list) <- sheets
+
+sheets
+nrow(collins_adults_list[["GO terms"]])
+
+no_data <- c()
+
+for (i in sheets) {
+  if (nrow(collins_adults_list[[i]]) < 1) {
+    no_data[[i]] <- FALSE
+  } else {
+    no_data[[i]] <- TRUE
+  }
+}
+
+no_data <- as.logical(no_data)
+
+collins_adults_list <- collins_adults_list[no_data]
+
+collins_adults_df <- data.table::rbindlist(collins_adults_list)
+
+```
+
+```{r}
+adult_stem1 <- collins_adults_list$`neoblast 1`
+adult_stem2 <- collins_adults_list$`neoblast 2`
+adult_stem3 <- collins_adults_list$`neoblast progeny`
+adult_stem4 <- collins_adults_list$`eled+ neoblasts`
+adult_stem5 <- collins_adults_list$`GSC progeny`
+adult_stem6 <- collins_adults_list$`early tsp-2+ cells`
+adult_stem7 <- collins_adults_list$`hes2+`
+adult_stem8 <- collins_adults_list$`GSCs`
+adult_stem9 <- collins_adults_list$`late female germ cells`
+adult_stem10 <- collins_adults_list$`late male germ cells`
+adult_stem11 <- collins_adults_list$`prom2+`
+adult_stem12 <- collins_adults_list$`S1`
+adult_stem13 <- collins_adults_list$`S1 progeny`
+
+
+adult_stem_ALL <- rbind(adult_stem1, adult_stem2, adult_stem3, adult_stem4, adult_stem5, adult_stem6, adult_stem7, adult_stem8, adult_stem9, adult_stem10, adult_stem11, adult_stem12, adult_stem13)
+
+```
+
+Make a heatmap
+```{r}
+venn = Venn(list(miracidia_stem$GO.ID, sporocyst_stem$GO.ID, somule_stem$GO.Accession, adult_stem_ALL$term_id))
+print(venn)
+
+venn@names <- c("Miracidia stem", "Sporocyst stem", "Somule stem", "Adult stem")
+print(venn)
+```
+
+```{r}
+names(venn@sets) <- c("Miracidia stem","Sporocyst stem", "Somule stem", "Adult stem")
+
+pdf("GO_compara/first_mira_sporo_somule_adult_compare_stem_0.7s.pdf", width = 8, height = 15)
+p1 = setmap(venn, slice = "all", element_clustering = TRUE,
+  set_clustering = FALSE, method = "average", legend = TRUE,
+  title = NA, element_fontsize = 8, set_fontsize = 10)
+
+
+p1
+# Close the pdf file
+dev.off()
+```
+
+Need to filter the four dataframes to min 2 terms 
+```{r}
+library(stringr)
+
+miracidia_stem_2genes <- miracidia_stem %>%
+  filter(str_detect(genes, ","))
+sporocyst_stem_2genes <- sporocyst_stem %>%
+  filter(str_detect(genes, ","))
+adult_stem_2genes <- adult_stem_ALL %>%
+  filter(str_detect(intersections, ","))
+```
+
+```{r}
+venn = Venn(list(miracidia_stem_2genes$Term, sporocyst_stem_2genes$Term, somule_stem$GO.name, adult_stem_2genes$term_name))
+print(venn)
+
+venn@names <- c("Miracidia stem", "Sporocyst stem", "Somule stem", "Adult stem")
+print(venn)
+names(venn@sets) <- c("Miracidia stem","Sporocyst stem", "Somule stem", "Adult stem")
+pdf("GO_compara/stringent_2genes_mira_sporo_somule_adult_compare_stem_0.7s.pdf", width = 8, height = 6)
+p10 = setmap(venn, slice = "all", element_clustering = TRUE,
+  set_clustering = FALSE, method = "average", legend = TRUE,
+  title = NA, element_fontsize = 8, set_fontsize = 10)
+
+p10
+# Close the pdf file
+dev.off()
+```
+
+
+and only BP
+Filter miracidia
+```{r}
+library(stringr)
+
+miracidia_stem_BPonly_2genes <- miracidia_stem_2genes %>%
+  filter(str_detect(Type, "BP"))
+```
+
+```{r}
+sporocyst_stem_BPonly_2genes <- sporocyst_stem_2genes %>%
+  filter(str_detect(Type, "BP"))
+```
+
+```{r}
+somule_stem_BPonly <- somule_stem %>%
+  filter(str_detect(Ontology, "biological_process"))
+```
+
+```{r}
+adult_stem_BPonly_2genes <- adult_stem_2genes %>%
+  filter(str_detect(source, "GO:BP"))
+```
+
+```{r}
+venn = Venn(list(miracidia_stem_BPonly_2genes$GO.ID, sporocyst_stem_BPonly_2genes$GO.ID, somule_stem_BPonly$GO.Accession, adult_stem_BPonly_2genes$term_id))
+print(venn)
+
+venn@names <- c("Miracidia stem", "Sporocyst stem", "Somule stem", "Adult stem")
+print(venn)
+names(venn@sets) <- c("Miracidia stem","Sporocyst stem", "Somule stem", "Adult stem")
+pdf("GO_compara/stringent_2genes_BPonly_mira_sporo_somule_adult_compare_stem_0.7s.pdf", width = 8, height = 6)
+p10 = setmap(venn, slice = "all", element_clustering = TRUE,
+  set_clustering = FALSE, method = "average", legend = TRUE,
+  title = NA, element_fontsize = 8, set_fontsize = 10)
+
+p10
+# Close the pdf file
+dev.off()
+```
+
+```{r}
+venn = Venn(list(miracidia_stem_BPonly_2genes$Term, sporocyst_stem_BPonly_2genes$Term, somule_stem_BPonly$GO.name, adult_stem_BPonly_2genes$term_name))
+print(venn)
+
+venn@names <- c("Miracidia stem", "Sporocyst stem", "Somule stem", "Adult stem")
+print(venn)
+names(venn@sets) <- c("Miracidia stem","Sporocyst stem", "Somule stem", "Adult stem")
+pdf("GO_compara/stringent_BPonly_mira_sporo_somule_adult_compare_stem_0.7s_names.pdf", width = 8, height = 6)
+p10 = setmap(venn, slice = "all", element_clustering = TRUE,
+  set_clustering = FALSE, method = "average", legend = TRUE,
+  title = NA, element_fontsize = 8, set_fontsize = 10)
+
+p10
+# Close the pdf file
+dev.off()
+```
+
+```{r}
+adult_stem_BPonly_2genes$stage <- 'adult'
+adult_stem_BPonly_2genes$tissue <- 'stem'
+somule_stem_BPonly$stage <- 'schistosomula'
+somule_stem_BPonly$tissue <- 'stem'
+sporocyst_stem_BPonly_2genes$stage <- 'sporocyst'
+sporocyst_stem_BPonly_2genes$tissue <- 'stem'
+miracidia_stem_BPonly_2genes$stage <- 'miracidia'
+miracidia_stem_BPonly_2genes$tissue <- 'stem'
+```
+
+```{r}
+adult_stem_BPonly_2genes <- adult_stem_BPonly_2genes %>% 
+        rename("Term" = "term_name",
+               "GO.ID" = "term_id",
+               "genes" = "intersections",
+               "Type" = "source")
+
+somule_stem_BPonly <- somule_stem_BPonly %>% 
+        rename("Term" = "GO.name",
+               "GO.ID" = "GO.Accession",
+               "Type" = "Ontology",
+               "Cell.type" = "Cell.cluster")
+```
+
+
+Need to add together the df, rbind or similar with specifed col names as they vary?
+```{r}
+all_stem <- bind_rows(adult_stem_BPonly_2genes,somule_stem_BPonly,sporocyst_stem_BPonly_2genes,miracidia_stem_BPonly_2genes)
+
+all_stem <- all_stem %>% select(Term, GO.ID,genes,Type,Cell.type,stage,tissue)
+write.csv(x=all_stem, file="GO_compara/mira_sporo_somule_adult_compare_stem_stringent_BP.csv")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
