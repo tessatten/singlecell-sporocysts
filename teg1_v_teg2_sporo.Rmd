@@ -1,0 +1,209 @@
+---
+title: "teg1_v_teg2_sporo"
+author: "T Attenborough"
+date: "2023-10-11"
+output: html_document
+---
+
+Load packages
+```{r}
+library(Seurat) #Seurat v4.0.2
+library(dplyr)
+library(patchwork)
+library(here)
+library(ggplot2)
+library(clustree)
+library(ggrepel)
+library(tidyverse)
+library(topGO)
+library(forcats)
+
+#sessionInfo()
+```
+
+This saves today's date for later
+```{r}
+st=format(Sys.time(), "%Y-%m-%d") 
+st
+```
+
+Now, import the threepercent sporocyst object
+```{r}
+sporocysts3 <- readRDS(file = "/Users/ta13/R_tutorials/sporocysts/sporocysts3.rds")
+```
+
+```{r}
+table(sporocysts3@active.ident)
+```
+
+```{r}
+sporocysts3.markers_roc_annotate <- read.csv("/Users/ta13/R_tutorials/sporocysts/sporocysts3.markers_roc_annotate_2022-07-18.csv", stringsAsFactors = FALSE, header = TRUE) #import the marker data from somule papaer
+```
+
+Import annotation information
+```{r}
+v9_genelist <- read.csv("/Users/ta13/R_git/r_teaching/WBPS17_genelist.csv", stringsAsFactors = FALSE, header = TRUE) #import the marker data from somule papaer
+v9_genelist$X <- NULL 
+```
+
+```{r}
+stem.response <- FindMarkers(sporocysts3, ident.1 = "Tegument 1", ident.2 = "Tegument 2", verbose = TRUE, min.pct=0.0, logfc.threshold=0.0)
+head(stem.response, n = 15)
+stem.response <- tibble::rownames_to_column(stem.response, "gene")
+stem.response$gene <- gsub('\\-', '_', stem.response$gene) #replace dashes in geneid with underscores
+stem.response <- stem.response %>% left_join(v9_genelist, by = c("gene" = "Name")) #check the top 5 marker genes are also in the somule paper
+write.csv(x=stem.response, file="sporocysts3_teg1Vteg2.csv") #save this as a csv
+```
+
+```{r}
+plot1 <- FeaturePlot(sporocysts3, features = "Smp-328760")
+LabelClusters(plot1, id = "ident", color = 'black', size =4, repel = T,  box.padding = 1.75, max.overlaps = Inf)
+ggsave(paste("sporocysts3-teg-DE-Smp-328760-labels-",st, ".pdf", sep = ""), width = 25, height = 15, units = c('cm'))
+```
+
+I have split this file, so one has all the DEGs from delta/phi, and one has all the degs from kappa
+
+Import the stem 1 DEGs
+```{r}
+teg1_deg <- read.csv("/Users/ta13/R_tutorials/sporocysts/sporocysts3_upin_teg1.csv", stringsAsFactors = FALSE, header = TRUE) 
+```
+
+Import the stem 1 DEGs
+```{r}
+teg2_deg <- read.csv("/Users/ta13/R_tutorials/sporocysts/sporocysts3_upin_teg2.csv", stringsAsFactors = FALSE, header = TRUE) 
+```
+
+SUBSET TO ONLY ADJ P VAL LESS THAN 0.001
+```{r}
+teg1_deg <- subset(teg1_deg, 
+       p_val_adj < 0.001,       # rows
+       select=c("gene", "p_val_adj")) # columns
+
+teg1_deg$p_val_adj <- NULL
+
+write.table(teg1_deg, file=paste0('teg1_deg_Markers_justgenes_', st, '.txt'), col.names = F, row.names = F,sep="\t", quote = FALSE)
+```
+
+```{r}
+teg2_deg <- subset(teg2_deg, 
+       p_val_adj < 0.001,       # rows
+       select=c("gene", "p_val_adj")) # columns
+
+teg2_deg$p_val_adj <- NULL
+
+write.table(teg2_deg, file=paste0('teg2_deg_Markers_justgenes_', st, '.txt'), col.names = F, row.names = F,sep="\t", quote = FALSE)
+```
+
+```{r}
+geneID2GO <- readMappings(file = "/Users/ta13/R_git/topgo_tutorial/test_GOterm_dict.txt", sep = " ") 
+```
+
+```{r}
+geneUniverse <- names(geneID2GO) 
+```
+
+
+Extract a list of all genes for comparison
+```{r}
+DefaultAssay(sporocysts3) <- "RNA"
+
+allGenesInSporo3 <- rownames(x = sporocysts3)
+
+head(allGenesInSporo3)
+
+allGenesInSporo3 <- data.frame(allGenesInSporo3)
+allGenesInSporo3$allGenesInSporo3 <- gsub('\\-', '_', allGenesInSporo3$allGenesInSporo3) #replace dashes with underscores
+write.csv(x=allGenesInSporo3, file="allGenesInSporo3.csv") #save this as a csv
+```
+
+Import the list of genes in the mira dataset
+```{r}
+listOfSporo3Genes <- read.csv("/Users/ta13/R_tutorials/sporocysts/allGenesInSporo3.csv", header=TRUE, stringsAsFactors=FALSE)
+listOfSporo3Genes$X <- NULL
+
+listOfSporo3Genes <- listOfSporo3Genes$allGenesInSporo3
+```
+
+Find the common elements from the full gene list from schisto, and the genes detected in sporo data
+```{r}
+sporo3_geneUniverse <- intersect(geneUniverse,listOfSporo3Genes)
+```
+
+```{r}
+Rscript TopGO_mira.R teg1_deg_Markers_justgenes_2023-10-11.txt BP
+Rscript TopGO_mira.R teg1_deg_Markers_justgenes_2023-10-11.txt MF
+```
+
+```{r}
+Rscript TopGO_mira.R teg2_deg_Markers_justgenes_2023-10-11.txt BP
+Rscript TopGO_mira.R teg2_deg_Markers_justgenes_2023-10-11.txt MF
+```
+
+Import the summary file
+```{r}
+topGO_summary_teg <- read.csv("/Users/ta13/R_tutorials/sporocysts/topGO_summary_sporos_teg_DE_withCC.csv", stringsAsFactors = FALSE, header = TRUE) #import the marker data from somule papaer
+```
+
+```{r}
+str(topGO_summary_teg)
+
+topGO_summary_teg$neglog10FDR
+unique(topGO_summary_teg$Colour)
+new_pal <- c("#fb8500","#7851a9")
+
+#fct_reorder(topGO_summary_sporos$Term, topGO_summary_mira$Cell.type, min)
+ggplot(data = topGO_summary_teg, aes(x = fct_reorder2(Term, neglog10FDR, Cell.type, min), y = neglog10FDR, fill = Cell.type)) + geom_bar(stat="identity") + 
+  scale_colour_identity()+
+       coord_flip()+theme_bw()+scale_fill_manual(values = new_pal)
+ggsave("topGO_summary_teg_filtv9_plot1.pdf", width = 20, height = 35, units = c('cm'))
+
+#fct_reorder(topGO_summary_sporos$Term, topGO_summary_sporos$Cell.type, min)
+ggplot(data = topGO_summary_teg, aes(x = fct_reorder2(Term, neglog10FDR, Cell.type), y = neglog10FDR, fill = Cell.type)) + geom_bar(stat="identity") + 
+  scale_colour_identity()+
+       coord_flip()+theme_bw()+scale_fill_manual(values = new_pal)+ labs(fill = " ", x = " ", y = "-log10FDR")+theme(axis.text.x=element_text(size=15),axis.text.y=element_text(size=12), axis.title.x = element_text(size = 18),legend.key.size = unit(0.8, 'cm'), legend.text = element_text(size=10))
+ggsave("topGO_summary_teg_filtv9_plot2.pdf", width = 20, height = 35, units = c('cm'))
+```
+
+```{r}
+#fct_reorder(topGO_summary_sporos$Term, topGO_summary_sporos$Cell.type, min)
+#fct_reorder(topGO_summary_sporos$Term, topGO_summary_sporos$Cell.type, min)
+ggplot(data = topGO_summary_teg, aes(x = Term, y = neglog10FDR, fill = Cell.type)) + geom_bar(stat="identity") + 
+  scale_colour_identity()+
+       coord_flip()+theme_bw()+scale_fill_manual(values = new_pal)+ labs(fill = " ", x = " ", y = "-log10FDR")+theme(axis.text.x=element_text(size=15),axis.text.y=element_text(size=12), axis.title.x = element_text(size = 18),legend.key.size = unit(0.8, 'cm'), legend.text = element_text(size=10))
+ggsave("topGO_summary_teg_filtv9_plot2.pdf", width = 15, height = 20, units = c('cm'))
+```
+
+```{r}
+plot1 <- FeaturePlot(sporocysts3, features = "Smp-328760")
+LabelClusters(plot1, id = "ident", color = 'black', size =4, repel = T,  box.padding = 1.75, max.overlaps = Inf)
+ggsave(paste("sporocysts3-teg-DE-Smp-328760-labels-",st, ".pdf", sep = ""), width = 25, height = 15, units = c('cm'))
+
+plot1 <- FeaturePlot(sporocysts3, features = "Smp-121950")
+LabelClusters(plot1, id = "ident", color = 'black', size =4, repel = T,  box.padding = 1.75, max.overlaps = Inf)
+ggsave(paste("sporocysts3-teg-DE-Smp-121950-labels-",st, ".pdf", sep = ""), width = 25, height = 15, units = c('cm'))
+
+plot1 <- FeaturePlot(sporocysts3, features = "Smp-173350")
+LabelClusters(plot1, id = "ident", color = 'black', size =4, repel = T,  box.padding = 1.75, max.overlaps = Inf)
+ggsave(paste("sporocysts3-teg-DE-Smp-173350-labels-",st, ".pdf", sep = ""), width = 25, height = 15, units = c('cm'))
+
+plot1 <- FeaturePlot(sporocysts3, features = "Smp-348500")
+LabelClusters(plot1, id = "ident", color = 'black', size =4, repel = T,  box.padding = 1.75, max.overlaps = Inf)
+ggsave(paste("sporocysts3-teg-DE-Smp-348500-labels-",st, ".pdf", sep = ""), width = 25, height = 15, units = c('cm'))
+
+plot1 <- FeaturePlot(sporocysts3, features = "Smp-153370")
+LabelClusters(plot1, id = "ident", color = 'black', size =4, repel = T,  box.padding = 1.75, max.overlaps = Inf)
+ggsave(paste("sporocysts3-teg-DE-Smp-153370-labels-",st, ".pdf", sep = ""), width = 25, height = 15, units = c('cm'))
+
+plot1 <- FeaturePlot(sporocysts3, features = "Smp-121430")
+LabelClusters(plot1, id = "ident", color = 'black', size =4, repel = T,  box.padding = 1.75, max.overlaps = Inf)
+ggsave(paste("sporocysts3-teg-DE-Smp-121430-labels-",st, ".pdf", sep = ""), width = 25, height = 15, units = c('cm'))
+```
+
+
+```{r}
+plot1 <- FeaturePlot(sporocysts3, features = "Smp-090230")
+LabelClusters(plot1, id = "ident", color = 'black', size =4, repel = T,  box.padding = 1.75, max.overlaps = Inf)
+ggsave(paste("sporocysts3-teg-DE-Smp-090230-labels-",st, ".pdf", sep = ""), width = 25, height = 15, units = c('cm'))
+```
+
+

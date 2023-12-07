@@ -1,0 +1,177 @@
+---
+title: "marker_genes_acroos_Stem"
+author: "T Attenborough"
+date: "2023-10-17"
+output: html_document
+---
+
+Load packages
+```{r}
+library(Seurat) #Seurat v4.0.2
+library(dplyr)
+library(patchwork)
+library(here)
+library(ggplot2)
+library(clustree)
+library(ggrepel)
+library(SeuratDisk)
+library(ggpubr)
+library(RVenn)
+library(readxl)
+library(data.table)
+library(UpSetR)
+library(pheatmap)
+#sessionInfo()
+
+```
+
+This saves today's date for later
+```{r}
+st=format(Sys.time(), "%Y-%m-%d") 
+st
+```
+
+Import annotation information
+```{r}
+v10_genelist <- read.csv("/Users/ta13/R_git/cerc_som_v10/v10_genes_with_descriptions_2023-04-17.csv", stringsAsFactors = FALSE, header = TRUE) #import the marker data from cercule papaer
+v10_genelist$X <- NULL 
+```
+
+Import miracidia marker genes
+```{r}
+miracidia.markers_roc_annotate <- read.csv("/Users/ta13/R_git/filtered_v10_miracidia/markerz_roc_with_lbls_run1.combined.v10_annotate_2023-01-23.csv", stringsAsFactors = FALSE, header = TRUE)
+miracidia.markers_roc_annotate <- miracidia.markers_roc_annotate %>% left_join(v10_genelist, by = c("gene" = "Gene.stable.ID")) #check the top 5 marker genes are also in the somule paper
+
+miracidia_stemgerm <- miracidia.markers_roc_annotate[miracidia.markers_roc_annotate$cluster=='Stem A' | miracidia.markers_roc_annotate$cluster=='Stem B' | miracidia.markers_roc_annotate$cluster=='Stem C' | miracidia.markers_roc_annotate$cluster=='Stem D' | miracidia.markers_roc_annotate$cluster=='Stem E' | miracidia.markers_roc_annotate$cluster=='Stem G' ,]
+miracidia_stemgerm
+table(miracidia_stemgerm$cluster)
+```
+
+Import sporocyst marker genes
+```{r}
+sporocysts3.markers_roc_annotate <- read.csv("/Users/ta13/R_tutorials/sporocysts/sporocysts3.markers_roc_annotate_2022-07-18.csv", stringsAsFactors = FALSE, header = TRUE)
+sporocysts3.markers_roc_annotate <- sporocysts3.markers_roc_annotate %>% left_join(v10_genelist, by = c("gene" = "Gene.stable.ID")) #check the top 5 marker genes are also in the somule paper
+
+sporocyst_stemgerm <- sporocysts3.markers_roc_annotate[sporocysts3.markers_roc_annotate$cluster=='Stem/germinal' ,]
+sporocyst_stemgerm
+```
+
+Import somule marker genes
+```{r}
+somule.markers_roc_annotate <- read.csv("/Users/ta13/R_tutorials/somule_diaz_supp.csv", stringsAsFactors = FALSE, header = TRUE)
+somule.markers_roc_annotate$Gene.identifier <- strtrim(somule.markers_roc_annotate$Gene.identifier, 10)
+somule.markers_roc_annotate <- somule.markers_roc_annotate %>% left_join(v10_genelist, by = c("Gene.identifier" = "Gene.stable.ID")) #check the top 5 marker genes are also in the somule paper
+
+somule_stemgerm <-  somule.markers_roc_annotate[somule.markers_roc_annotate$cluster=='Stem/Germinal cells' ,]
+somule_stemgerm
+table(somule_stemgerm$cluster)
+```
+
+Import adult marker genes
+```{r}
+adult.markers_roc_annotate <- read.csv("/Users/ta13/R_tutorials/adult_collins_markers.csv", stringsAsFactors = FALSE, header = TRUE)
+adult.markers_roc_annotate <- adult.markers_roc_annotate %>% left_join(v10_genelist, by = c("gene" = "Gene.stable.ID")) #check the top 5 marker genes are also in the somule paper
+table(adult.markers_roc_annotate$cluster)
+
+adult_stem <-  adult.markers_roc_annotate[adult.markers_roc_annotate$cluster=='neoblast 1' | adult.markers_roc_annotate$cluster=='neoblast 2' | adult.markers_roc_annotate$cluster=='neoblast progeny' | adult.markers_roc_annotate$cluster=='eled+ neoblasts' | adult.markers_roc_annotate$cluster=='zfp-1-1+' ,]
+
+adult_germ <-  adult.markers_roc_annotate[adult.markers_roc_annotate$cluster=='GSCs' | adult.markers_roc_annotate$cluster=='late female germ cells' | adult.markers_roc_annotate$cluster=='late male germ cells' | adult.markers_roc_annotate$cluster=='GSC progeny' | adult.markers_roc_annotate$cluster=='S1' | adult.markers_roc_annotate$cluster=='S1 progeny',]
+
+adult_progenitors <-  adult.markers_roc_annotate[adult.markers_roc_annotate$cluster=='early tsp-2+ cells' | adult.markers_roc_annotate$cluster=='hes2+' | adult.markers_roc_annotate$cluster=='prom2+',]
+```
+
+Now, need to filter these lists
+```{r}
+miracidia_stemgerm <- filter(miracidia_stemgerm, myAUC >= 0.6)
+sporocyst_stemgerm <- filter(sporocyst_stemgerm, myAUC >= 0.6)
+somule_stemgerm <- filter(somule_stemgerm, myAUC >= 0.6)
+```
+
+```{r}
+adult_stem <-adult_stem %>% group_by(cluster) %>% top_n(n = -200, wt = p_val_adj)
+adult_progenitors <-adult_progenitors %>% group_by(cluster) %>% top_n(n = -200, wt = p_val_adj)
+adult_germ <-adult_germ %>% group_by(cluster) %>% top_n(n = -200, wt = p_val_adj)
+```
+
+```{r}
+adult_stem <-adult_stem %>% group_by(cluster) %>% top_n(n = 25, wt = avg_logFC) %>% ungroup()
+adult_progenitors <-adult_progenitors %>% group_by(cluster) %>% top_n(n = 25, wt = avg_logFC) %>% ungroup()
+adult_germ <-adult_germ %>% group_by(cluster) %>% top_n(n = 25, wt = avg_logFC) %>% ungroup()
+
+miracidia_stemgerm <-miracidia_stemgerm %>% group_by(cluster) %>% top_n(n = 25, wt = avg_log2FC) %>% ungroup()
+sporocyst_stemgerm <-sporocyst_stemgerm %>% group_by(cluster) %>% top_n(n = 30, wt = avg_log2FC) %>% ungroup()
+somule_stemgerm <-somule_stemgerm %>% group_by(cluster) %>% top_n(n = 30, wt = avgerage.diff) %>% ungroup()
+```
+
+```{r}
+adult_stem <-adult_stem  %>% top_n(n = 30, wt = avg_logFC)
+adult_progenitors <-adult_progenitors  %>% top_n(n = 30, wt = avg_logFC)
+adult_germ <-adult_germ  %>% top_n(n = 30, wt = avg_logFC)
+
+miracidia_stemgerm <-miracidia_stemgerm %>%top_n(n = 30, wt = avg_log2FC)
+sporocyst_stemgerm <-sporocyst_stemgerm %>% top_n(n = 30, wt = avg_log2FC)
+somule_stemgerm <-somule_stemgerm %>% top_n(n = 30, wt = avgerage.diff)
+
+```
+
+```{r}
+allmygenes <- data.frame(miracidia_stemgerm$gene,sporocyst_stemgerm$gene,somule_stemgerm$Gene.identifier,adult_stem$gene,adult_progenitors$gene,adult_germ$gene)
+
+write.csv(x=allmygenes, file="markergene_compara/mira_sporo_somule_adult_compare_Stem_markers_top30.csv")
+
+```
+
+
+Make a heatmap
+```{r}
+venn = Venn(list(unique(miracidia_stemgerm$gene), unique(sporocyst_stemgerm$gene), unique(somule_stemgerm$Gene.identifier), unique(adult_stem$gene), unique(adult_progenitors$gene), unique(adult_germ$gene)))
+print(venn)
+
+venn@names <- c("Miracidia Stem", "Sporocyst Stem", "Somule Stem", "Adult Stem", "Adult Progenitors", "Adult Germ")
+print(venn)
+```
+
+```{r}
+names(venn@sets) <- c("Miracidia Stem", "Sporocyst Stem", "Somule Stem", "Adult Stem", "Adult Progenitors", "Adult Germ")
+
+pdf("markergene_compara/mira_sporo_somule_adult_compare_Stem_markers_top50.pdf", width = 8, height = 25)
+p1 = setmap(venn, slice = "all", element_clustering = TRUE,
+  set_clustering = FALSE, method = "average", legend = TRUE,
+  title = NA, element_fontsize = 8, set_fontsize = 10)
+
+
+p1
+# Close the pdf file
+dev.off()
+```
+
+```{r}
+adult_stem$descriptions <- strtrim(adult_stem$Gene.description, 50)
+adult_stem$nice_lbl <- paste(adult_stem$descriptions, adult_stem$gene, sep= "- ")
+adult_progenitors$descriptions <- strtrim(adult_progenitors$Gene.description, 50)
+adult_progenitors$nice_lbl <- paste(adult_progenitors$descriptions, adult_progenitors$gene, sep= "- ")
+adult_germ$descriptions <- strtrim(adult_germ$Gene.description, 50)
+adult_germ$nice_lbl <- paste(adult_germ$descriptions, adult_germ$gene, sep= "- ")
+
+somule_stemgerm$descriptions <- strtrim(somule_stemgerm$Gene.description, 50)
+somule_stemgerm$nice_lbl <- paste(somule_stemgerm$descriptions, somule_stemgerm$Gene.identifier, sep= "- ")
+sporocyst_stemgerm$descriptions <- strtrim(sporocyst_stemgerm$Gene.description, 50)
+sporocyst_stemgerm$nice_lbl <- paste(sporocyst_stemgerm$descriptions, sporocyst_stemgerm$gene, sep= "- ")
+miracidia_stemgerm$descriptions <- strtrim(miracidia_stemgerm$Gene.description, 50)
+miracidia_stemgerm$nice_lbl <- paste(miracidia_stemgerm$descriptions, miracidia_stemgerm$gene, sep= "- ")
+```
+
+```{r}
+venn = Venn(list(unique(miracidia_stemgerm$nice_lbl), unique(sporocyst_stemgerm$nice_lbl), unique(somule_stemgerm$nice_lbl), unique(adult_stem$nice_lbl), unique(adult_progenitors$nice_lbl), unique(adult_germ$nice_lbl)))
+venn@names <- c("Miracidia Stem", "Sporocyst Stem", "Somule Stem", "Adult Stem", "Adult Progenitors", "Adult Germ")
+names(venn@sets) <- c("Miracidia Stem", "Sporocyst Stem", "Somule Stem", "Adult Stem", "Adult Progenitors", "Adult Germ")
+
+pdf("markergene_compara/mira_sporo_somule_adult_compare_Stem_markers_nicelbl_top30.pdf", width = 10, height = 30)
+p1 = setmap(venn, slice = "all", element_clustering = TRUE,
+  set_clustering = FALSE, method = "average", legend = TRUE,
+  title = NA, element_fontsize = 8, set_fontsize = 10)
+p1
+# Close the pdf file
+dev.off()
+```
+

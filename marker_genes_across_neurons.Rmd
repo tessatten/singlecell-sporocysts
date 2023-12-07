@@ -1,0 +1,161 @@
+---
+title: "marker_genes_acroos_Neuron"
+author: "T Attenborough"
+date: "2023-10-17"
+output: html_document
+---
+
+Load packages
+```{r}
+library(Seurat) #Seurat v4.0.2
+library(dplyr)
+library(patchwork)
+library(here)
+library(ggplot2)
+library(clustree)
+library(ggrepel)
+library(SeuratDisk)
+library(ggpubr)
+library(RVenn)
+library(readxl)
+library(data.table)
+library(UpSetR)
+library(pheatmap)
+#sessionInfo()
+
+```
+
+This saves today's date for later
+```{r}
+st=format(Sys.time(), "%Y-%m-%d") 
+st
+```
+
+Import annotation information
+```{r}
+v10_genelist <- read.csv("/Users/ta13/R_git/cerc_som_v10/v10_genes_with_descriptions_2023-04-17.csv", stringsAsFactors = FALSE, header = TRUE) #import the marker data from cercule papaer
+v10_genelist$X <- NULL 
+```
+
+Import miracidia marker genes
+```{r}
+miracidia.markers_roc_annotate <- read.csv("/Users/ta13/R_git/filtered_v10_miracidia/markerz_roc_with_lbls_run1.combined.v10_annotate_2023-01-23.csv", stringsAsFactors = FALSE, header = TRUE)
+miracidia.markers_roc_annotate <- miracidia.markers_roc_annotate %>% left_join(v10_genelist, by = c("gene" = "Gene.stable.ID")) #check the top 5 marker genes are also in the somule paper
+
+miracidia_neur <- miracidia.markers_roc_annotate[miracidia.markers_roc_annotate$cluster=='Neuron 1' | miracidia.markers_roc_annotate$cluster=='Neuron 2' | miracidia.markers_roc_annotate$cluster=='Neuron 3' | miracidia.markers_roc_annotate$cluster=='Neuron 5' | miracidia.markers_roc_annotate$cluster=='Neuron 6' ,]
+miracidia_neur
+```
+
+Import sporocyst marker genes
+```{r}
+sporocysts3.markers_roc_annotate <- read.csv("/Users/ta13/R_tutorials/sporocysts/sporocysts3.markers_roc_annotate_2022-07-18.csv", stringsAsFactors = FALSE, header = TRUE)
+sporocysts3.markers_roc_annotate <- sporocysts3.markers_roc_annotate %>% left_join(v10_genelist, by = c("gene" = "Gene.stable.ID")) #check the top 5 marker genes are also in the somule paper
+
+sporocyst_neur <- sporocysts3.markers_roc_annotate[sporocysts3.markers_roc_annotate$cluster=='Neuron' ,]
+sporocyst_neur
+```
+
+Import somule marker genes
+```{r}
+somule.markers_roc_annotate <- read.csv("/Users/ta13/R_tutorials/somule_diaz_supp.csv", stringsAsFactors = FALSE, header = TRUE)
+somule.markers_roc_annotate$Gene.identifier <- strtrim(somule.markers_roc_annotate$Gene.identifier, 10)
+somule.markers_roc_annotate <- somule.markers_roc_annotate %>% left_join(v10_genelist, by = c("Gene.identifier" = "Gene.stable.ID")) #check the top 5 marker genes are also in the somule paper
+
+somule_neur <-  somule.markers_roc_annotate[somule.markers_roc_annotate$cluster=='gnai+ neurons' | somule.markers_roc_annotate$cluster=='7b2/pc2+ neurons'| somule.markers_roc_annotate$cluster=='NDF+ neurons' | somule.markers_roc_annotate$cluster=='Smkk7+ neurons' ,]
+somule_neur
+table(somule_neur$cluster)
+```
+
+Import adult marker genes
+```{r}
+adult.markers_roc_annotate <- read.csv("/Users/ta13/R_tutorials/adult_collins_markers.csv", stringsAsFactors = FALSE, header = TRUE)
+adult.markers_roc_annotate <- adult.markers_roc_annotate %>% left_join(v10_genelist, by = c("gene" = "Gene.stable.ID")) #check the top 5 marker genes are also in the somule paper
+table(adult.markers_roc_annotate$cluster)
+adult_neur <-  adult.markers_roc_annotate[adult.markers_roc_annotate$cluster=='neuron 1' | adult.markers_roc_annotate$cluster=='neuron 2' | adult.markers_roc_annotate$cluster=='neuron 3' | adult.markers_roc_annotate$cluster=='neuron 4' | adult.markers_roc_annotate$cluster=='neuron 5' | adult.markers_roc_annotate$cluster=='neuron 6' | adult.markers_roc_annotate$cluster=='neuron 7' | adult.markers_roc_annotate$cluster=='neuron 8' | adult.markers_roc_annotate$cluster=='neuron 9' | adult.markers_roc_annotate$cluster=='neuron 10' | adult.markers_roc_annotate$cluster=='neuron 11' | adult.markers_roc_annotate$cluster=='neuron 12' | adult.markers_roc_annotate$cluster=='neuron 13' | adult.markers_roc_annotate$cluster=='neuron 14' | adult.markers_roc_annotate$cluster=='neuron 15' | adult.markers_roc_annotate$cluster=='neuron 16' | adult.markers_roc_annotate$cluster=='neuron 17' | adult.markers_roc_annotate$cluster=='neuron 18' | adult.markers_roc_annotate$cluster=='neuron 19' | adult.markers_roc_annotate$cluster=='neuron 20' | adult.markers_roc_annotate$cluster=='neuron 21' | adult.markers_roc_annotate$cluster=='neuron 22' | adult.markers_roc_annotate$cluster=='neuron 23' | adult.markers_roc_annotate$cluster=='neuron 24' | adult.markers_roc_annotate$cluster=='neuron 25' | adult.markers_roc_annotate$cluster=='neuron 26' | adult.markers_roc_annotate$cluster=='neuron 27' | adult.markers_roc_annotate$cluster=='neuron 28' | adult.markers_roc_annotate$cluster=='neuron 29' | adult.markers_roc_annotate$cluster=='neuron 30' | adult.markers_roc_annotate$cluster=='neuron 31 (7b2-)' ,]
+table(adult_neur$cluster)
+```
+
+Now, need to filter these lists
+```{r}
+miracidia_neur <- filter(miracidia_neur, myAUC >= 0.6)
+sporocyst_neur <- filter(sporocyst_neur, myAUC >= 0.6)
+somule_neur <- filter(somule_neur, myAUC >= 0.6)
+```
+
+```{r}
+adult_neur <-adult_neur %>% group_by(cluster) %>% top_n(n = -200, wt = p_val_adj)
+```
+
+```{r}
+adult_neur <-adult_neur %>% group_by(cluster) %>% top_n(n = 25, wt = avg_logFC) %>% ungroup()
+
+miracidia_neur <-miracidia_neur %>% group_by(cluster) %>% top_n(n = 25, wt = avg_log2FC) %>% ungroup()
+sporocyst_neur <-sporocyst_neur %>% group_by(cluster) %>% top_n(n = 30, wt = avg_log2FC) %>% ungroup()
+somule_neur <-somule_neur %>% group_by(cluster) %>% top_n(n = 25, wt = avgerage.diff) %>% ungroup()
+```
+
+```{r}
+adult_neur <-adult_neur  %>% top_n(n = 30, wt = avg_logFC)
+
+miracidia_neur <-miracidia_neur %>%top_n(n = 30, wt = avg_log2FC)
+sporocyst_neur <-sporocyst_neur %>% top_n(n = 30, wt = avg_log2FC)
+somule_neur <-somule_neur %>% top_n(n = 30, wt = avgerage.diff)
+
+```
+
+```{r}
+allmygenes <- data.frame(miracidia_neur$gene,sporocyst_neur$gene,somule_neur$Gene.identifier,adult_neur$gene)
+
+write.csv(x=allmygenes, file="markergene_compara/mira_sporo_somule_adult_compare_Neuron_markers30.csv")
+
+```
+
+
+Make a heatmap
+```{r}
+venn = Venn(list(unique(miracidia_neur$gene), unique(sporocyst_neur$gene), unique(somule_neur$Gene.identifier), unique(adult_neur$gene)))
+print(venn)
+
+venn@names <- c("Miracidia Neuron", "Sporocyst Neuron", "Somule Neuron", "Adult Neuron")
+print(venn)
+```
+
+```{r}
+names(venn@sets) <- c("Miracidia Neuron", "Sporocyst Neuron", "Somule Neuron", "Adult Neuron")
+
+pdf("markergene_compara/mira_sporo_somule_adult_compare_Neuron_markers.pdf", width = 8, height = 15)
+p1 = setmap(venn, slice = "all", element_clustering = TRUE,
+  set_clustering = FALSE, method = "average", legend = TRUE,
+  title = NA, element_fontsize = 8, set_fontsize = 10)
+
+
+p1
+# Close the pdf file
+dev.off()
+```
+
+```{r}
+adult_neur$descriptions <- strtrim(adult_neur$descriptions, 50)
+adult_neur$nice_lbl <- paste(adult_neur$descriptions, adult_neur$gene, sep= "- ")
+somule_neur$descriptions <- strtrim(somule_neur$descriptions, 50)
+somule_neur$nice_lbl <- paste(somule_neur$descriptions, somule_neur$Gene.identifier, sep= "- ")
+sporocyst_neur$descriptions <- strtrim(sporocyst_neur$descriptions, 50)
+sporocyst_neur$nice_lbl <- paste(sporocyst_neur$descriptions, sporocyst_neur$gene, sep= "- ")
+miracidia_neur$descriptions <- strtrim(miracidia_neur$descriptions, 50)
+miracidia_neur$nice_lbl <- paste(miracidia_neur$descriptions, miracidia_neur$gene, sep= "- ")
+```
+
+```{r}
+venn = Venn(list(unique(miracidia_neur$nice_lbl), unique(sporocyst_neur$nice_lbl), unique(somule_neur$nice_lbl), unique(adult_neur$nice_lbl)))
+venn@names <- c("Miracidia Neuron", "Sporocyst Neuron", "Somule Neuron", "Adult Neuron")
+names(venn@sets) <- c("Miracidia Neuron", "Sporocyst Neuron", "Somule Neuron", "Adult Neuron")
+
+pdf("markergene_compara/mira_sporo_somule_adult_compare_Neuron_markers_nicelbl30.pdf", width = 10, height = 25)
+p1 = setmap(venn, slice = "all", element_clustering = TRUE,
+  set_clustering = FALSE, method = "average", legend = TRUE,
+  title = NA, element_fontsize = 8, set_fontsize = 10)
+p1
+# Close the pdf file
+dev.off()
+```
+

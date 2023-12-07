@@ -1,0 +1,160 @@
+---
+title: "marker_genes_acroos_Parenchyma"
+author: "T Attenborough"
+date: "2023-10-17"
+output: html_document
+---
+
+Load packages
+```{r}
+library(Seurat) #Seurat v4.0.2
+library(dplyr)
+library(patchwork)
+library(here)
+library(ggplot2)
+library(clustree)
+library(ggrepel)
+library(SeuratDisk)
+library(ggpubr)
+library(RVenn)
+library(readxl)
+library(data.table)
+library(UpSetR)
+library(pheatmap)
+#sessionInfo()
+
+```
+
+This saves today's date for later
+```{r}
+st=format(Sys.time(), "%Y-%m-%d") 
+st
+```
+
+Import annotation information
+```{r}
+v10_genelist <- read.csv("/Users/ta13/R_git/cerc_som_v10/v10_genes_with_descriptions_2023-04-17.csv", stringsAsFactors = FALSE, header = TRUE) #import the marker data from cercule papaer
+v10_genelist$X <- NULL 
+```
+
+Import miracidia marker genes
+```{r}
+miracidia.markers_roc_annotate <- read.csv("/Users/ta13/R_git/filtered_v10_miracidia/markerz_roc_with_lbls_run1.combined.v10_annotate_2023-01-23.csv", stringsAsFactors = FALSE, header = TRUE)
+miracidia.markers_roc_annotate <- miracidia.markers_roc_annotate %>% left_join(v10_genelist, by = c("gene" = "Gene.stable.ID")) #check the top 5 marker genes are also in the somule paper
+
+miracidia_paren <- miracidia.markers_roc_annotate[miracidia.markers_roc_annotate$cluster=='Parenchyma 1' | miracidia.markers_roc_annotate$cluster=='Parenchyma 2' ,]
+miracidia_paren
+```
+
+Import sporocyst marker genes
+```{r}
+sporocysts3.markers_roc_annotate <- read.csv("/Users/ta13/R_tutorials/sporocysts/sporocysts3.markers_roc_annotate_2022-07-18.csv", stringsAsFactors = FALSE, header = TRUE)
+sporocysts3.markers_roc_annotate <- sporocysts3.markers_roc_annotate %>% left_join(v10_genelist, by = c("gene" = "Gene.stable.ID")) #check the top 5 marker genes are also in the somule paper
+
+sporocyst_paren <- sporocysts3.markers_roc_annotate[sporocysts3.markers_roc_annotate$cluster=='Parenchymal' ,]
+sporocyst_paren
+```
+
+Import somule marker genes
+```{r}
+somule.markers_roc_annotate <- read.csv("/Users/ta13/R_tutorials/somule_diaz_supp.csv", stringsAsFactors = FALSE, header = TRUE)
+somule.markers_roc_annotate$Gene.identifier <- strtrim(somule.markers_roc_annotate$Gene.identifier, 10)
+somule.markers_roc_annotate <- somule.markers_roc_annotate %>% left_join(v10_genelist, by = c("Gene.identifier" = "Gene.stable.ID")) #check the top 5 marker genes are also in the somule paper
+
+somule_paren <-  somule.markers_roc_annotate[somule.markers_roc_annotate$cluster=='Parenchymal 1' | somule.markers_roc_annotate$cluster=='Parenchymal 2' ,]
+somule_paren
+```
+
+Import adult marker genes
+```{r}
+adult.markers_roc_annotate <- read.csv("/Users/ta13/R_tutorials/adult_collins_markers.csv", stringsAsFactors = FALSE, header = TRUE)
+adult.markers_roc_annotate <- adult.markers_roc_annotate %>% left_join(v10_genelist, by = c("gene" = "Gene.stable.ID")) #check the top 5 marker genes are also in the somule paper
+table(adult.markers_roc_annotate$cluster)
+adult_paren <-  adult.markers_roc_annotate[adult.markers_roc_annotate$cluster=='parenchyma 1' | adult.markers_roc_annotate$cluster=='parenchyma 2' ,]
+adult_paren
+```
+
+Now, need to filter these lists
+```{r}
+miracidia_paren <- filter(miracidia_paren, myAUC >= 0.6)
+sporocyst_paren <- filter(sporocyst_paren, myAUC >= 0.6)
+somule_paren <- filter(somule_paren, myAUC >= 0.6)
+```
+
+```{r}
+adult_paren <-adult_paren %>% group_by(cluster) %>% top_n(n = -200, wt = p_val_adj)
+```
+
+```{r}
+adult_paren <-adult_paren %>% group_by(cluster) %>% top_n(n = 25, wt = avg_logFC) %>% ungroup()
+
+miracidia_paren <-miracidia_paren %>% group_by(cluster) %>% top_n(n = 25, wt = avg_log2FC) %>% ungroup()
+sporocyst_paren <-sporocyst_paren %>% group_by(cluster) %>% top_n(n = 30, wt = avg_log2FC) %>% ungroup()
+somule_paren <-somule_paren %>% group_by(cluster) %>% top_n(n = 25, wt = avgerage.diff) %>% ungroup()
+```
+
+```{r}
+adult_paren <-adult_paren  %>% top_n(n = 30, wt = avg_logFC)
+
+miracidia_paren <-miracidia_paren %>%top_n(n = 30, wt = avg_log2FC)
+sporocyst_paren <-sporocyst_paren %>% top_n(n = 30, wt = avg_log2FC)
+somule_paren <-somule_paren %>% top_n(n = 30, wt = avgerage.diff)
+
+```
+
+```{r}
+allmygenes <- data.frame(miracidia_paren$gene,sporocyst_paren$gene,somule_paren$Gene.identifier,adult_paren$gene)
+
+write.csv(x=allmygenes, file="markergene_compara/mira_sporo_somule_adult_compare_Parenchyma_markers30.csv")
+
+```
+
+
+Make a heatmap
+```{r}
+venn = Venn(list(unique(miracidia_paren$gene), unique(sporocyst_paren$gene), unique(somule_paren$Gene.identifier), unique(adult_paren$gene)))
+print(venn)
+
+venn@names <- c("Miracidia Parenchyma", "Sporocyst Parenchyma", "Somule Parenchyma", "Adult Parenchyma")
+print(venn)
+```
+
+```{r}
+names(venn@sets) <- c("Miracidia Parenchyma", "Sporocyst Parenchyma", "Somule Parenchyma", "Adult Parenchyma")
+
+pdf("markergene_compara/mira_sporo_somule_adult_compare_Parenchyma_markers.pdf", width = 8, height = 15)
+p1 = setmap(venn, slice = "all", element_clustering = TRUE,
+  set_clustering = FALSE, method = "average", legend = TRUE,
+  title = NA, element_fontsize = 8, set_fontsize = 10)
+
+
+p1
+# Close the pdf file
+dev.off()
+```
+
+```{r}
+adult_paren$descriptions <- strtrim(adult_paren$descriptions, 50)
+adult_paren$nice_lbl <- paste(adult_paren$descriptions, adult_paren$gene, sep= "- ")
+somule_paren$descriptions <- strtrim(somule_paren$descriptions, 50)
+somule_paren$nice_lbl <- paste(somule_paren$descriptions, somule_paren$Gene.identifier, sep= "- ")
+sporocyst_paren$descriptions <- strtrim(sporocyst_paren$descriptions, 50)
+sporocyst_paren$nice_lbl <- paste(sporocyst_paren$descriptions, sporocyst_paren$gene, sep= "- ")
+miracidia_paren$descriptions <- strtrim(miracidia_paren$descriptions, 50)
+miracidia_paren$nice_lbl <- paste(miracidia_paren$descriptions, miracidia_paren$gene, sep= "- ")
+```
+
+```{r}
+venn = Venn(list(unique(miracidia_paren$nice_lbl), unique(sporocyst_paren$nice_lbl), unique(somule_paren$nice_lbl), unique(adult_paren$nice_lbl)))
+venn@names <- c("Miracidia Parenchyma", "Sporocyst Parenchyma", "Somule Parenchyma", "Adult Parenchyma")
+names(venn@sets) <- c("Miracidia Parenchyma", "Sporocyst Parenchyma", "Somule Parenchyma", "Adult Parenchyma")
+
+pdf("markergene_compara/mira_sporo_somule_adult_compare_Parenchyma_markers_nicelbl30.pdf", width = 10, height = 20)
+p1 = setmap(venn, slice = "all", element_clustering = TRUE,
+  set_clustering = FALSE, method = "average", legend = TRUE,
+  title = NA, element_fontsize = 8, set_fontsize = 10)
+p1
+# Close the pdf file
+dev.off()
+```
+
