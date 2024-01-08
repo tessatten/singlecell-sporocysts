@@ -1,0 +1,191 @@
+---
+title: "top_markers_3perc_sporos"
+author: "T Attenborough"
+date: "05/04/2023"
+output: html_document
+---
+
+Load packages
+```{r}
+library(Seurat) #Seurat v4.0.2
+library(dplyr)
+library(patchwork)
+library(here)
+library(ggplot2)
+library(clustree)
+library(ggrepel)
+library(tidyverse)
+
+#sessionInfo()
+
+```
+
+This saves today's date for later
+```{r}
+st=format(Sys.time(), "%Y-%m-%d") 
+st
+```
+
+Now, import the threepercent sporocyst object
+```{r}
+sporocysts3 <- readRDS(file = "/Users/ta13/R_tutorials/sporocysts/sporocysts3.rds")
+```
+
+```{r}
+table(sporocysts3@active.ident)
+```
+
+```{r}
+sporocysts3.markers_roc_annotate <- read.csv("/Users/ta13/R_tutorials/sporocysts/sporocysts3.markers_roc_annotate_2022-07-18.csv", stringsAsFactors = FALSE, header = TRUE) #import the marker data from somule papaer
+
+```
+
+Here I am going to find a list of marker genes for cluster 0. Carmen suggested genes which are expressed in more than 70% of cells in the cluster, and less than 30% of cells in other clusters.
+
+```{r}
+#Select just cluster 0
+clustX <- sporocysts3.markers_roc_annotate[grepl('Muscle',sporocysts3.markers_roc_annotate$cluster),]
+#leaves 2768 genes
+
+#Select just those with at least myAUC of 0.7
+clustX <- clustX %>%
+  filter(myAUC >= 0.6)
+#leaves 6 genes
+
+clustX$gene <- gsub('\\-', '_', clustX$gene) #replace dashes in geneid with underscores
+
+write.csv(x=clustX, file="Muscle_Markers_April5.csv")
+write.csv(x=clustX$gene, file="Muscle_Markers_April5_justgenes.csv", col.names=FALSE)
+
+#Select just those with at least myAUC of 0.7
+clustX <- clustX %>%
+  filter(myAUC >= 0.7)
+#leaves 6 genes
+
+clustX$gene <- gsub('\\-', '_', clustX$gene) #replace dashes in geneid with underscores
+
+write.csv(x=clustX$gene, file="Muscle_Markers_April14_justgenes.csv", col.names=FALSE)
+```
+
+```{r}
+#Select just cluster 0
+clustX <- sporocysts3.markers_roc_annotate[grepl('Neuron',sporocysts3.markers_roc_annotate$cluster),]
+#leaves 2768 genes
+
+#Select just those with at least myAUC of 0.7
+clustX <- clustX %>%
+  filter(myAUC >= 0.6)
+#leaves 6 genes
+
+clustX$gene <- gsub('\\-', '_', clustX$gene) #replace dashes in geneid with underscores
+
+write.csv(x=clustX, file="Neuron_Markers_April5.csv")
+write.csv(x=clustX$gene, file="Neuron_Markers_April5_justgenes.csv", col.names=FALSE)
+
+#Select just those with at least myAUC of 0.7
+clustX <- clustX %>%
+  filter(myAUC >= 0.7)
+#leaves 6 genes
+
+clustX$gene <- gsub('\\-', '_', clustX$gene) #replace dashes in geneid with underscores
+
+write.csv(x=clustX$gene, file="Neuron_Markers_April12_justgenes.csv", col.names=FALSE)
+```
+
+```{r}
+#Select just cluster 0
+clustX <- sporocysts3.markers_roc_annotate[grepl('Stem/germinal',sporocysts3.markers_roc_annotate$cluster),]
+#leaves 2768 genes
+
+#Select just those with at least myAUC of 0.7
+clustX <- clustX %>%
+  filter(myAUC >= 0.6)
+#leaves 6 genes
+
+clustX$gene <- gsub('\\-', '_', clustX$gene) #replace dashes in geneid with underscores
+
+write.csv(x=clustX, file="Stem-germinal_Markers_April5.csv")
+write.csv(x=clustX$gene, file="Stem-germinal_Markers_April5_justgenes.csv", col.names=FALSE)
+
+#Select just those with at least myAUC of 0.7
+clustX <- clustX %>%
+  filter(myAUC >= 0.7)
+#leaves 6 genes
+
+clustX$gene <- gsub('\\-', '_', clustX$gene) #replace dashes in geneid with underscores
+write.csv(x=clustX$gene, file="Stem-germinal_Markers_April12_justgenes.csv", col.names=FALSE)
+```
+
+```{r}
+#Select just cluster 0
+clustX <- sporocysts3.markers_roc_annotate[grepl('Parenchymal',sporocysts3.markers_roc_annotate$cluster),]
+#leaves 2768 genes
+
+#Select just those with at least myAUC of 0.7
+clustX <- clustX %>%
+  filter(myAUC >= 0.6)
+#leaves 6 genes
+
+clustX$gene <- gsub('\\-', '_', clustX$gene) #replace dashes in geneid with underscores
+
+write.csv(x=clustX, file="Parenchymal_Markers_April5.csv")
+write.csv(x=clustX$gene, file="Parenchymal_Markers_April5_justgenes.csv", col.names=FALSE)
+
+#Select just those with at least myAUC of 0.7
+clustX <- clustX %>%
+  filter(myAUC >= 0.7)
+#leaves 6 genes
+
+clustX$gene <- gsub('\\-', '_', clustX$gene) #replace dashes in geneid with underscores
+
+write.csv(x=clustX$gene, file="Parenchymal_Markers_April12_justgenes.csv", col.names=FALSE)
+```
+
+```{r}
+#Select just cluster 0
+clustX <- sporocysts3.markers_roc_annotate[grepl('Tegument 1',sporocysts3.markers_roc_annotate$cluster),]
+#leaves 2768 genes
+
+#Select just those with at least myAUC of 0.7
+clustX <- clustX %>%
+  filter(myAUC >= 0.6)
+#leaves 6 genes
+
+clustX$gene <- gsub('\\-', '_', clustX$gene) #replace dashes in geneid with underscores
+
+write.csv(x=clustX, file="Tegument-1_Markers_April5.csv")
+write.csv(x=clustX$gene, file="Tegument-1_Markers_April5_justgenes.csv", col.names=FALSE)
+
+#Select just those with at least myAUC of 0.7
+clustX <- clustX %>%
+  filter(myAUC >= 0.7)
+#leaves 6 genes
+
+clustX$gene <- gsub('\\-', '_', clustX$gene) #replace dashes in geneid with underscores
+write.csv(x=clustX$gene, file="Tegument-1_Markers_April12_justgenes.csv", col.names=FALSE)
+```
+
+```{r}
+#Select just cluster 0
+clustX <- sporocysts3.markers_roc_annotate[grepl('Tegument 2',sporocysts3.markers_roc_annotate$cluster),]
+#leaves 2768 genes
+
+#Select just those with at least myAUC of 0.7
+clustX <- clustX %>%
+  filter(myAUC >= 0.7)
+#leaves 6 genes
+
+clustX$gene <- gsub('\\-', '_', clustX$gene) #replace dashes in geneid with underscores
+
+write.csv(x=clustX, file="Tegument-2_Markers_April5.csv")
+write.csv(x=clustX$gene, file="Tegument-2_Markers_April5_justgenes.csv", col.names=FALSE)
+
+#Select just those with at least myAUC of 0.7
+clustX <- clustX %>%
+  filter(myAUC >= 0.7)
+#leaves 6 genes
+
+clustX$gene <- gsub('\\-', '_', clustX$gene) #replace dashes in geneid with underscores
+write.csv(x=clustX$gene, file="Tegument-2_Markers_April12_justgenes.csv", col.names=FALSE)
+```
+

@@ -1,0 +1,574 @@
+---
+title: "sporo3perc_analysis"
+author: "T Attenborough"
+date: "21/03/2022"
+output: html_document
+---
+
+Load packages
+```{r}
+library(Seurat) #Seurat v4.0.2
+library(dplyr)
+library(patchwork)
+library(here)
+library(ggplot2)
+library(clustree)
+library(ggrepel)
+library(leiden)
+#sessionInfo()
+```
+
+Import the lit marker document 
+```{r}
+lit_markers <- read.csv(here("/Users/ta13/Documents/my_lit_markers.csv"))
+lit_markers$Gene_ID <- gsub('\\_', '-', lit_markers$Gene_ID) #replace dashes with underscores
+```
+
+Now, import the final sporocyst data object from Carmen,and 
+```{r}
+sporocysts <- readRDS(file = "/Users/ta13/data/Seurat_Object/Final_objects/sporo_dataset_final.RDS")
+```
+
+Now, import the final somule data object from Carmen
+```{r}
+somules <- readRDS(file = "/Users/ta13/data/Seurat_Object/Final_objects/somules.RDS")
+```
+
+Filter out cells with more than 3% mito gene expression
+```{r}
+sporocysts3 <- subset(sporocysts, subset = percent.mt < 3)
+dim(sporocysts3) #shows number of genes and number of cells
+```
+
+This leaves us with 601 cells.
+
+Re-cluster with only 3percent mito
+```{r}
+sporocysts3 <- FindVariableFeatures(sporocysts3, selection.method = "vst", nfeatures = 2000)
+all.genes <- rownames(sporocysts3)
+sporocysts3 <- ScaleData(sporocysts3, features = all.genes)
+
+sporocysts3 <- RunPCA(sporocysts3, features = VariableFeatures(object = sporocysts3))
+
+# Examine and visualize PCA results a few different ways
+print(sporocysts3[["pca"]], dims = 1:5, nfeatures = 5)
+
+VizDimLoadings(sporocysts3, dims = 1:2, reduction = "pca")
+
+DimPlot(sporocysts3, reduction = "pca")
+
+DimHeatmap(sporocysts3, dims = 1, cells = 500, balanced = TRUE)
+
+sporocysts3 <- JackStraw(sporocysts3, num.replicate = 100, dims =50)
+sporocysts3 <- ScoreJackStraw(sporocysts3, dims = 1:50)
+JackStrawPlot(sporocysts3, dims = 1:50)
+ElbowPlot(sporocysts3)
+```
+
+```{r}
+#Check how many PCs to use for the data using Mathews Molecular cross validation
+source("code.R")
+mcv = molecularCrossValidation(sporocysts3@assays$RNA@counts, varGenes = VariableFeatures(sporocysts3),normalisation = minimalSeuratV3)
+
+plotMCV(mcv)
+```
+
+This indicates the use of 12 PCs
+
+PLot new cluster, and some QC data
+```{r}
+sporocysts3 <- FindNeighbors(sporocysts3, dims = 1:12)
+sporocysts3 <- FindClusters(sporocysts3, resolution = 0.4,  algorithm = 1)
+sporocysts3 <- RunUMAP(sporocysts3, dims = 1:12)
+DimPlot(sporocysts3, reduction = "umap", label = TRUE)+ NoLegend()
+ggsave("sporocysts3_pc12_res0.4.pdf", width = 15, height = 15, units = c('cm'))
+
+
+FeatureScatter(object = sporocysts, feature1 = "nFeature_RNA", feature2 = "percent.mt", group.by="ident")
+
+FeatureScatter(object = sporocysts3, feature1 = "nFeature_RNA", feature2 = "percent.mt", group.by="ident")
+table(sporocysts3@meta.data$RNA_snn_res.0.4)
+```
+Try with res of 3 to capture neurons
+```{r}
+sporocysts3 <- FindNeighbors(sporocysts3, dims = 1:12)
+sporocysts3 <- FindClusters(sporocysts3, resolution = 3)
+sporocysts3 <- RunUMAP(sporocysts3, dims = 1:12)
+DimPlot(sporocysts3, reduction = "umap", label = TRUE)+ NoLegend()
+ggsave("sporocysts3_pc12_res3.pdf", width = 15, height = 15, units = c('cm'))
+
+
+FeatureScatter(object = sporocysts, feature1 = "nFeature_RNA", feature2 = "percent.mt", group.by="ident")
+
+FeatureScatter(object = sporocysts3, feature1 = "nFeature_RNA", feature2 = "percent.mt", group.by="ident")
+table(sporocysts3@meta.data$RNA_snn_res.3)
+```
+
+Use clustree to find optimal cluster res
+```{r}
+# Select a range of resolutions
+resolution.range <- seq(from = 0, to = 3, by = 0.5)
+
+# Find clusters using a range of resolutions
+sporocysts3 <- Seurat::FindClusters(object = sporocysts3, resolution = resolution.range)
+
+clustree(sporocysts3)
+ggsave("sporocysts3.clust_12PC_0_to_3_tree_SCT.pdf", width = 15, height = 25, units = c('cm'))
+```
+
+Use somule data to initially project annotations onto miracidia run1 sorted data
+```{r}
+DefaultAssay(sporocysts3) <- "RNA"
+
+#This is for label transfer
+pair.anchors <- FindTransferAnchors(reference = somules, query = sporocysts3, dims = 1:25, features = intersect(VariableFeatures(somules), VariableFeatures(sporocysts3)))
+
+predictions <- TransferData(anchorset = pair.anchors, refdata = Idents(somules), dims = 1:25)
+
+sporocysts3 <- AddMetaData(sporocysts3, metadata = predictions)
+DimPlot(sporocysts3, group.by = 'predicted.id', label = T, label.size = 2)
+ggsave("sporocysts3_labels_from_somules.pdf")
+```
+
+
+Cluster 12 gives the neuron cluster
+
+Print the cell IDs of the cluster 12 cells
+```{r}
+#Idents(object = sporocysts3)
+WhichCells(object = sporocysts3, ident = '12')
+neuronIDs <- WhichCells(object = sporocysts3, ident = '12')
+```
+
+Re-run the clustering at 0.4 res
+```{r}
+sporocysts3 <- FindNeighbors(sporocysts3, dims = 1:12)
+sporocysts3 <- FindClusters(sporocysts3, resolution = 0.4,  algorithm = 1)
+sporocysts3 <- RunUMAP(sporocysts3, dims = 1:12)
+DimPlot(sporocysts3, reduction = "umap", label = TRUE)+ NoLegend()
+ggsave("sporocysts3_pc12_res0.4.pdf", width = 15, height = 15, units = c('cm'))
+```
+
+How many clusters?
+```{r}
+table(Idents(sporocysts3))
+```
+
+Rename the neuron cluster as 5
+
+```{r}
+Idents(sporocysts3, cells = c(neuronIDs)) <- '5'
+head(Idents(sporocysts3))
+table(Idents(sporocysts3))
+```
+
+PLot the UMAP
+```{r}
+DimPlot(sporocysts3, reduction = "umap", label = TRUE)+ NoLegend()
+```
+
+```{r}
+sporocysts3 <- RenameIdents(object = sporocysts3, 
+                               "0" = "Muscle",
+                               "1" = "Tegument 1",
+                               "2" = "Stem/germinal",
+                               "3" = "Parenchymal",
+                               "4" = "Tegument 2",
+                               "5" = "Neuron")
+
+sporocysts3@active.ident <- factor(sporocysts3@active.ident, 
+                            levels=c("Muscle",
+                                     "Neuron",
+                                     "Parenchymal",
+                                     "Stem/germinal",
+                                     "Tegument 1",
+                                     "Tegument 2"))
+
+DimPlot(sporocysts3, reduction = "umap", label = TRUE)+ NoLegend()
+```
+
+```{r}
+sporocysts3[["may.ident"]] <- Idents(object = sporocysts3)
+```
+
+
+Add custom colour palette
+```{r}
+new_pal <- c("#ffb703","#007aaa","#107E7D","#c40c18","#fb8500","#7851a9")
+plot1 <- DimPlot(sporocysts3, reduction = "umap", label = FALSE, repel = TRUE, label.box = FALSE) + NoLegend() +scale_color_manual(values = new_pal)
+LabelClusters(plot1, id = "ident", color = 'black', size =4, repel = T,  box.padding = 1.75)
+ggsave("fancyumapJun22.pdf", width = 15, height = 12, units = c('cm'))
+```
+
+Find all markers
+```{r}
+#find all markers
+sporocysts3.markers_roctest <- FindAllMarkers(sporocysts3, only.pos = TRUE, min.pct = 0.0, logfc.threshold = 0.25, test.use = "roc", return.thresh = 0)
+
+sporocysts3.top5_roc=sporocysts3.markers_roctest %>% group_by(cluster) %>% top_n(n = 5, wt = myAUC)# groups the markers by cluster, then picks the top 5 most differentiually expressed markers
+write.csv(x=sporocysts3.markers_roctest, file="top5_markerz_roc_sporocysts3_jul5.csv")
+```
+
+Plot top 5 markers of each cluster by AUC
+```{r}
+sporocysts3.markers_roctest$gene <- gsub('\\_', '-', sporocysts3.markers_roctest$gene) #replace dashes in geneid with underscores
+dotplot_features=sporocysts3.markers_roctest %>% group_by(cluster) %>% top_n(n = 5, wt = myAUC)
+
+DotPlot(object = sporocysts3, features = unique(dotplot_features$gene)) + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+ scale_color_viridis(discrete = FALSE)
+ggsave("sporocysts3_top5genes_myAUC_jul5.pdf", width = 25, height = 15, units = c('cm'))
+
+dotplot_features=sporocysts3.markers_roctest %>% group_by(cluster) %>% top_n(n = 3, wt = myAUC)
+
+DotPlot(object = sporocysts3, features = unique(dotplot_features$gene)) + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+ scale_color_viridis(discrete = FALSE)
+ggsave("sporocysts3_top3genes_myAUC_jul5.pdf", width = 20, height = 15, units = c('cm'))
+
+```
+
+```{r}
+carm_clust <- read.csv("/Users/ta13/R_tutorials/clean_miracidia/somule_seurat markers.csv", stringsAsFactors = FALSE, header = TRUE) 
+carm_clust_min <- carm_clust %>% select (c(Gene.identifier, cluster, Description))
+
+sporocysts3.markers_roctest$gene <- gsub('\\-', '_', sporocysts3.markers_roctest$gene) #replace dashes in geneid with underscores
+
+sporocysts3.markers_roc_annotate <- sporocysts3.markers_roctest %>% left_join(carm_clust_min, by = c("gene" = "Gene.identifier")) 
+write.csv(x=sporocysts3.markers_roc_annotate, file="sporocysts3.markers_roc_annotatejul6.csv") #save this as a csv
+```
+
+```{r}
+dotplot_features=sporocysts3.markers_roc_annotate %>% group_by(cluster.x) %>% top_n(n = 5, wt = myAUC)
+write.csv(x=dotplot_features, file="sporocysts3.markers_roc_annotatejul_top5.csv") #save this as a csv
+```
+
+Here I am going to find a list of marker genes for cluster 0. Carmen suggested genes which are expressed in more than 70% of cells in the cluster, and less than 30% of cells in other clusters.
+```{r}
+#Select just cluster 0
+clustX <-filter(sporocysts3.markers_roctest, cluster == "Muscle")
+#leaves 2768 genes
+
+#Select just those in at least 70% of the clust0 cells
+clustX <-filter(clustX, pct.1 >= 0.7)
+#leaves 28 genes
+
+#Select just those in 30% or less of the other cells
+clustX <-filter(clustX, pct.2 <= 0.3)
+#leaves 6 genes
+
+#Select just those with at least myAUC of 0.7
+clustX <-filter(clustX, myAUC >= 0.7)
+#leaves 6 genes
+
+clustX$gene <- gsub('\\-', '_', clustX$gene) #replace dashes in geneid with underscores
+
+write.csv(x=clustX, file="0_Markers_Mar22.csv")
+
+```
+
+Attach some annotation info from somule markers
+```{r}
+carm_clust <- read.csv("/Users/ta13/R_tutorials/clean_miracidia/somule_seurat markers.csv", stringsAsFactors = FALSE, header = TRUE)
+carm_clust_min <- carm_clust %>% select (c(Gene.identifier, cluster, Description))
+
+clustX_annotate <- clustX %>% left_join(carm_clust_min, by = c("gene" = "Gene.identifier")) 
+write.csv(x=clustX_annotate, file="0_Markers_annotateMar22.csv") #save this as a csv
+
+```
+
+Make a dotplot of these genes
+```{r}
+features <- gsub('\\_', '-', clustX_annotate$gene) #replace dashes with underscores
+
+DotPlot(object = sporocysts3, features = unique(features)) + theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=0.5))+ scale_color_viridis(discrete = FALSE, option="viridis")
+ggsave("0_Markers_annotateMar22_myAUC.pdf", width = 15, height = 12, units = c('cm'))
+```
+
+```{r}
+#Select just cluster 0
+clustX <-filter(sporocysts3.markers_roctest, cluster == "Tegument 1")
+#leaves 666 genes
+
+#Select just those in at least 70% of the clust0 cells
+clustX <-filter(clustX, pct.1 >= 0.7)
+#leaves 78 genes
+
+#Select just those in 30% or less of the other cells
+clustX <-filter(clustX, pct.2 <= 0.3)
+#leaves 49 genes
+
+#Select just those with at least myAUC of 0.7
+clustX <-filter(clustX, myAUC >= 0.7)
+#leaves 49 genes
+
+clustX$gene <- gsub('\\-', '_', clustX$gene) #replace dashes in geneid with underscores
+
+write.csv(x=clustX, file="1_Markers_Mar22.csv")
+
+```
+
+Attach some annotation info from somule markers
+```{r}
+clustX_annotate <- clustX %>% left_join(carm_clust_min, by = c("gene" = "Gene.identifier")) 
+write.csv(x=clustX_annotate, file="1_Markers_annotateMar22.csv") #save this as a csv
+
+```
+
+Make a dotplot of these genes
+```{r}
+features <- gsub('\\_', '-', clustX_annotate$gene) #replace dashes with underscores
+
+DotPlot(object = sporocysts3, features = unique(features)) + theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=0.5))+ scale_color_viridis(discrete = FALSE, option="cividis")
+ggsave("1_Markers_annotateMar22_myAUC.pdf", width = 30, height = 12, units = c('cm'))
+```
+
+Here I am going to find a list of marker genes for cluster 2. 
+
+```{r}
+#Select just cluster 0
+clustX <-filter(sporocysts3.markers_roctest, cluster == "Stem/germinal")
+#leaves 1271 genes
+
+#Select just those in at least 70% of the clust0 cells
+clustX <-filter(clustX, pct.1 >= 0.7)
+#leaves 205 genes
+
+#Select just those in 30% or less of the other cells
+clustX <-filter(clustX, pct.2 <= 0.3)
+#leaves 12 genes
+
+#Select just those with at least myAUC of 0.7
+clustX <-filter(clustX, myAUC >= 0.7)
+#leaves 4 genes
+
+clustX$gene <- gsub('\\-', '_', clustX$gene) #replace dashes in geneid with underscores
+
+write.csv(x=clustX, file="2_Markers_Mar22.csv")
+
+```
+
+Attach some annotation info from somule markers
+```{r}
+
+clustX_annotate <- clustX %>% left_join(carm_clust_min, by = c("gene" = "Gene.identifier"))
+write.csv(x=clustX_annotate, file="2_Markers_annotateMar22.csv") #save this as a csv
+
+```
+
+Make a dotplot of these genes
+```{r}
+features <- gsub('\\_', '-', clustX_annotate$gene) #replace dashes with underscores
+
+DotPlot(object = sporocysts3, features = unique(features)) + theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=0.5))+ scale_color_viridis(discrete = FALSE, option="cividis")
+ggsave("2_Markers_annotateMar22_myAUC.pdf", width = 15, height = 12, units = c('cm'))
+```
+
+Here I am going to find a list of marker genes for cluster 3.
+```{r}
+#Select just cluster 0
+clustX <-filter(sporocysts3.markers_roctest, cluster == "Parenchymal")
+#leaves 961 genes
+
+#Select just those in at least 70% of the clust0 cells
+clustX <-filter(clustX, pct.1 >= 0.7)
+#leaves 27 genes
+
+#Select just those in 30% or less of the other cells
+clustX <-filter(clustX, pct.2 <= 0.3)
+#leaves 8 genes
+
+#Select just those with at least myAUC of 0.7
+clustX <-filter(clustX, myAUC >= 0.7)
+#leaves 8 genes
+
+clustX$gene <- gsub('\\-', '_', clustX$gene) #replace dashes in geneid with underscores
+
+write.csv(x=clustX, file="3_Markers_Mar22.csv")
+
+```
+
+Attach some annotation info from somule markers
+```{r}
+clustX_annotate <- clustX %>% left_join(carm_clust_min, by = c("gene" = "Gene.identifier"))
+write.csv(x=clustX_annotate, file="3_Markers_annotateMar22.csv") #save this as a csv
+```
+
+Make a dotplot of these genes
+```{r}
+features <- gsub('\\_', '-', clustX_annotate$gene) #replace dashes with underscores
+
+DotPlot(object = sporocysts3, features = unique(features)) + theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=0.5))+ scale_color_viridis(discrete = FALSE, option="cividis")
+ggsave("3_Markers_annotateMar22_myAUC.pdf", width = 15, height = 12, units = c('cm'))
+```
+
+Here I am going to find a list of marker genes for cluster 4.
+
+```{r}
+#Select just cluster 0
+clustX <-filter(sporocysts3.markers_roctest, cluster == "Tegument 2")
+#leaves 660 genes
+
+#Select just those in at least 70% of the clust0 cells
+clustX <-filter(clustX, pct.1 >= 0.7)
+#leaves 102 genes
+
+#Select just those in 30% or less of the other cells
+clustX <-filter(clustX, pct.2 <= 0.3)
+#leaves 9 genes
+
+#Select just those with at least myAUC of 0.7
+clustX <-filter(clustX, myAUC >= 0.7)
+#leaves 9 genes
+
+clustX$gene <- gsub('\\-', '_', clustX$gene) #replace dashes in geneid with underscores
+
+write.csv(x=clustX, file="4_Markers_Mar22.csv")
+
+```
+
+Attach some annotation info from somule markers
+```{r}
+clustX_annotate <- clustX %>% left_join(carm_clust_min, by = c("gene" = "Gene.identifier"))
+write.csv(x=clustX_annotate, file="4_Markers_annotateMar22.csv") #save this as a csv
+
+```
+
+Make a dotplot of these genes
+```{r}
+features <- gsub('\\_', '-', clustX_annotate$gene) #replace dashes with underscores
+
+DotPlot(object = sporocysts3, features = unique(features)) + theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=0.5))+ scale_color_viridis(discrete = FALSE, option="cividis")
+ggsave("4_Markers_annotateMar22_myAUC.pdf", width = 15, height = 12, units = c('cm'))
+```
+
+Here I am going to find a list of marker genes for cluster 5.
+
+```{r}
+#Select just cluster 0
+clustX <-filter(sporocysts3.markers_roctest, cluster == "Neuron")
+#leaves 2502 genes
+
+#Select just those in at least 70% of the clust0 cells
+clustX <-filter(clustX, pct.1 >= 0.7)
+#leaves 22 genes
+
+#Select just those in 30% or less of the other cells
+clustX <-filter(clustX, pct.2 <= 0.3)
+#leaves 6 genes
+
+#Select just those with at least myAUC of 0.7
+clustX <-filter(clustX, myAUC >= 0.7)
+#leaves 6 genes
+
+clustX$gene <- gsub('\\-', '_', clustX$gene) #replace dashes in geneid with underscores
+
+write.csv(x=clustX, file="5_Markers_Mar22.csv")
+
+```
+
+Attach some annotation info from somule markers
+```{r}
+clustX_annotate <- clustX %>% left_join(carm_clust_min, by = c("gene" = "Gene.identifier"))
+write.csv(x=clustX_annotate, file="5_Markers_annotateMar22.csv") #save this as a csv
+
+```
+
+Make a dotplot of these genes
+```{r}
+features <- gsub('\\_', '-', clustX_annotate$gene) #replace dashes with underscores
+
+DotPlot(object = sporocysts3, features = unique(features)) + theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=0.5))+ scale_color_viridis(discrete = FALSE, option="cividis")
+ggsave("5_Markers_annotateMar22_myAUC.pdf", width = 15, height = 12, units = c('cm'))
+```
+
+Check for some known marker genes
+```{r}
+#Intramammalian stem cell
+features <- subset(lit_markers, Stage == "Intramammalian" & Population == "cpx+", select = Gene_ID)
+
+# Feature plot - visualize feature expression in low-dimensional space
+p1 = FeaturePlot(sporocysts3, features = features$Gene_ID) 
+p1
+
+ggsave("intramammalian_cpx+_3.pdf", width = 20, height = 30, units = c('cm'))
+
+
+#there is no Smp_050220 in the stem cell clust
+#this is intramallalian neural preogenitor markers
+
+```
+
+intramolluscan kappa markers
+```{r}
+features <- subset(lit_markers, Stage == "Intramolluscan" & Population == "kappa", select = Gene_ID)
+
+# Feature plot - visualize feature expression in low-dimensional space
+FeaturePlot(sporocysts3, features = features$Gene_ID)
+
+ggsave("sporocysts_intramolluscan_kappa3.pdf", width = 35, height = 25, units = c('cm'))
+```
+
+```{r}
+features <- subset(lit_markers, Stage == "Intramolluscan" & Population == "delta", select = Gene_ID)
+
+# Feature plot - visualize feature expression in low-dimensional space
+FeaturePlot(sporocysts3, features = features$Gene_ID)
+
+ggsave("sporocysts_intramolluscan_delta3.pdf", width = 35, height = 25, units = c('cm'))
+```
+
+```{r}
+features <- subset(lit_markers, Stage == "Intramolluscan" & Population == "phi", select = Gene_ID)
+
+# Feature plot - visualize feature expression in low-dimensional space
+FeaturePlot(sporocysts3, features = features$Gene_ID)
+
+ggsave("sporocysts_intramolluscan_phi3.pdf", width = 35, height = 25, units = c('cm'))
+```
+
+Extract a list of all genes for comparison
+```{r}
+allGenesInSporos3 <- rownames(x = sporocysts3)
+
+head(allGenesInSporos3)
+
+allGenesInSporos3 <- data.frame(allGenesInSporos3)
+allGenesInSporos3$allGenesInSporos3 <- gsub('\\-', '_', allGenesInSporos3$allGenesInSporos3) #replace dashes with underscores
+write.csv(x=allGenesInSporos3, file="allGenesInSporos3.csv") #save this as a csv
+
+```
+
+Export the CSV of raw counts - just the stem cell cluster
+```{r}
+
+table(sporocysts3@meta.data$may.ident)
+sporocysts3_subset <- subset(sporocysts3, idents = c("Stem/germinal"))
+table(sporocysts3_subset@meta.data$may.ident)
+counts <- sporocysts3_subset@assays$RNA@counts
+write.csv(x = counts, file = '/Users/ta13/sporocysts3.stem.counts_2.csv')
+write.csv(x = sporocysts3_subset@meta.data, file = '/Users/ta13/meta_fromsporocysts3.stem.csv')
+
+write.csv(x = sporocysts3@meta.data, file = '/Users/ta13/meta_fromsporocysts3.csv')
+
+```
+
+Save that annotation information as metadata
+```{r}
+sporocysts3[["new.ident"]] <- Idents(object = sporocysts3)
+```
+
+```{r}
+# load tidyverse packages
+library(tidyverse)
+# create cluster ID table
+tibble(cellID = colnames(sporocysts3), clusterID = Idents(sporocysts3)) %>%
+  # write out to a file, with today's date
+  write_csv(file = sprintf("sporocysts3_cluster_mappings_%s.csv", Sys.Date()))
+
+run1.combined_52_meta <- tibble::rownames_to_column(sporocysts3@meta.data, "cellID") %>%
+  # write out to a file, with today's date
+  write_csv(file = sprintf("sporocysts3_meta_%s.csv", Sys.Date()))
+```
+
+
+```{r}
+saveRDS(sporocysts3, file = "sporocysts3.rds") #saves this version of the dataset
+
+```

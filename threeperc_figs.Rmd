@@ -1,0 +1,235 @@
+---
+title: "threeperc_figs"
+author: "T Attenborough"
+date: "05/07/2022"
+output: html_document
+---
+
+Load packages
+```{r}
+library(Seurat) #Seurat v4.0.2
+library(dplyr)
+library(patchwork)
+library(here)
+library(ggplot2)
+library(clustree)
+library(ggrepel)
+#sessionInfo()
+
+```
+
+his saves today's date for later
+```{r}
+st=format(Sys.time(), "%Y-%m-%d") 
+st
+```
+
+Now, import the threepercent sporocyst object
+```{r}
+sporocysts3 <- readRDS(file = "/Users/ta13/R_tutorials/sporocysts/sporocysts3.rds")
+```
+
+```{r}
+table(sporocysts3@active.ident)
+```
+
+
+Find all markers
+```{r}
+
+#find all markers
+sporocysts3.markers_roctest <- FindAllMarkers(sporocysts3, only.pos = TRUE, min.pct = 0.0, logfc.threshold = 0.25, test.use = "roc", return.thresh = 0)
+
+sporocysts3.top5_roc=sporocysts3.markers_roctest %>% group_by(cluster) %>% top_n(n = 5, wt = myAUC)# groups the markers by cluster, then picks the top 5 most differentiually expressed markers
+
+sporocysts3.markers_roctest$gene <- gsub('\\-', '_', sporocysts3.markers_roctest$gene) #replace dashes with underscores
+
+write.csv(x=sporocysts3.markers_roctest, file="top_markers_roc_sporocysts3_jul6.csv")
+```
+
+
+Attach annotation information to the marker gene list
+```{r}
+v9_genelist <- read.csv("/Users/ta13/R_git/r_teaching/WBPS17_genelist.csv", stringsAsFactors = FALSE, header = TRUE) #import the marker data from somule papaer
+v9_genelist$X <- NULL 
+```
+
+```{r}
+sporocysts3.markers_roctest$gene <- gsub('\\-', '_', sporocysts3.markers_roctest$gene) #replace dashes in geneid with underscores
+sporocysts3.markers_roc_annotate <- sporocysts3.markers_roctest %>% left_join(v9_genelist, by = c("gene" = "Name")) #check the top 5 marker genes are also in the somule paper
+write.csv(x=sporocysts3.markers_roc_annotate, file="sporocysts3.markers_roc_annotatejul6.csv") #save this as a csv
+
+write.csv(x=sporocysts3.markers_roc_annotate, file=paste0('sporocysts3.markers_roc_annotate_', st, '.csv')) #save this as a csv
+```
+
+```{r}
+sporocysts3.markers_roc_annotate_top5=sporocysts3.markers_roc_annotate %>% group_by(cluster) %>% top_n(n = 5, wt = myAUC)
+write.csv(x=sporocysts3.markers_roc_annotate_top5, file=paste0('sporocysts3.markers_roc_annotate_top5_', st, '.csv')) #save this as a csv
+```
+
+Now, some dotplots
+
+Select the top 10 marker genes by AUC, by cluster
+```{r}
+dotplot_features=sporocysts3.markers_roc_annotate %>% group_by(cluster.x) %>% top_n(n = 5, wt = myAUC)
+dotplot_features$Description <- strtrim(dotplot_features$Description, 50)
+dotplot_features$nice_lbl <- paste(dotplot_features$Description, dotplot_features$gene, sep= " - ")
+```
+
+Import the top genes with a neaten list
+```{r}
+dotplot_features <- read.csv("/Users/ta13/R_tutorials/sporocysts/dotplot_features_sporocysts3_2022-07-05.csv", stringsAsFactors = FALSE, header = TRUE) #import the marker data from somule papaer
+dotplot_features$nice_lbl <- paste(dotplot_features$Description, dotplot_features$gene, sep= " - ")
+```
+
+
+```{r}
+features <- gsub('\\_', '-', dotplot_features$gene) #replace dashes with underscores
+features <- append(features, "Smp-318890")
+
+dp1 <- DotPlot(object = sporocysts3, features = unique(features)) + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+ scale_color_viridis(discrete = FALSE)
+dp1
+ggsave("sporocysts3_top5genes_jul6.pdf", width = 25, height = 14, units = c('cm'))
+
+myNewLabs <- unique(dotplot_features$nice_lbl)
+
+dp1 <- DotPlot(object = sporocysts3, features = unique(features)) + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+ scale_color_viridis(discrete = FALSE)
+dp1 <-dp1+ scale_x_discrete(breaks=c(unique(features)),
+        labels=c(myNewLabs))
+dp1
+ggsave("sporocysts3_top5genes_jul6_anno.pdf", width = 25, height = 25, units = c('cm'))
+```
+
+First, all the cluster
+```{r}
+features <- subset(dotplot_features, select = gene)
+features <- gsub('\\_', '-', features$gene) #replace dashes with underscores
+featurelabs <- subset(dotplot_features, select = nice_lbl)
+myNewLabs <- unique(featurelabs$nice_lbl)
+
+
+dp1 <- DotPlot(object = sporocysts3, features = unique(features)) + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+ scale_color_viridis(discrete = FALSE)
+dp1
+
+ggsave("sporocysts3_top5genes_allclusts_jul6.pdf", width = 25, height = 14, units = c('cm'))
+
+dp1 <- DotPlot(object = sporocysts3, features = unique(features)) + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+ scale_color_viridis(discrete = FALSE)
+dp1 <-dp1+ scale_x_discrete(breaks=c(unique(features)),
+        labels=c(myNewLabs))
+#+ theme(axis.text.x = element_text(angle=55, vjust = 1))
+dp1
+ggsave("sporocysts3_top5genes__allclusts_anno_jul6.pdf", width = 25, height = 25, units = c('cm'))
+
+```
+
+
+Add some muscle genes of interest
+```{r}
+dotplot_features_bonus <- read.csv("/Users/ta13/R_tutorials/sporocysts/dotplot_features_sporocysts3_2022-07-05_bonus.csv", stringsAsFactors = FALSE, header = TRUE) #import the marker data from somule papaer
+dotplot_features_bonus$nice_lbl <- paste(dotplot_features_bonus$Description, dotplot_features_bonus$gene, sep= " - ")
+
+dp1 <- DotPlot(object = sporocysts3, features = unique(features)) + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+ scale_color_viridis(discrete = FALSE)
+dp1
+
+ggsave("sporocysts3_top5genes_allclusts_waddedgenesjul6.pdf", width = 25, height = 14, units = c('cm'))
+
+myNewLabs <- unique(dotplot_features_bonus$nice_lbl)
+
+
+dp1 <- DotPlot(object = sporocysts3, features = unique(features)) + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+ scale_color_viridis(discrete = FALSE)
+dp1 <-dp1+ scale_x_discrete(breaks=c(unique(features)),
+        labels=c(myNewLabs))
+dp1
+ggsave("sporocysts3_top5genes_allclusts_waddedgenes_anno_jul6.pdf", width = 25, height = 25, units = c('cm'))
+
+```
+
+First, the muscle cluster
+```{r}
+features <- subset(dotplot_features, cluster.x == "Muscle", select = gene)
+features <- gsub('\\_', '-', features$gene) #replace dashes with underscores
+featurelabs <- subset(dotplot_features, cluster.x == "Muscle", select = nice_lbl)
+myNewLabs <- unique(featurelabs$nice_lbl)
+
+
+dp1 <- DotPlot(object = sporocysts3, features = unique(features)) + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+ scale_color_viridis(discrete = FALSE)
+dp1
+
+ggsave("sporocysts3_top5genes_muscleclusts_jul5.pdf", width = 20, height = 14, units = c('cm'))
+
+dp1 <- DotPlot(object = sporocysts3, features = unique(features)) + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+ scale_color_viridis(discrete = FALSE)
+dp1 <-dp1+ scale_x_discrete(breaks=c(unique(features)),
+        labels=c(myNewLabs))
+dp1
+ggsave("sporocysts3_top5genes__muscleclusts_anno_jul5.pdf", width = 20, height = 25, units = c('cm'))
+
+```
+
+
+Add some muscle genes of interest
+```{r}
+features <- append(features, "Smp-156540")
+features <- append(features, "Smp-156150")
+features <- append(features, "Smp-126240")
+features <- append(features, "Smp-167400")
+features <- append(features, "Smp-136710")
+features <- append(features, "Smp-015820")
+
+features_annotate <- data.frame(features)
+features_annotate$features <- gsub('\\-', '_', features_annotate$features) #replace dashes with underscores
+features_annotate <- features_annotate %>% left_join(carm_clust_min, by = c("features" = "Gene.identifier"))
+features_annotate$Description <- strtrim(features_annotate$Description, 50)
+features_annotate$nice_lbl <- paste(features_annotate$Description, features_annotate$features, sep= " - ")
+
+dp1 <- DotPlot(object = sporocysts3, features = unique(features)) + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+ scale_color_viridis(discrete = FALSE)
+dp1
+
+ggsave("sporocysts3_top5genes_muscleclusts_waddedgenesjul5.pdf", width = 20, height = 14, units = c('cm'))
+
+myNewLabs <- unique(features_annotate$nice_lbl)
+
+
+dp1 <- DotPlot(object = sporocysts3, features = unique(features)) + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+ scale_color_viridis(discrete = FALSE)
+dp1 <-dp1+ scale_x_discrete(breaks=c(unique(features)),
+        labels=c(myNewLabs))
+dp1
+ggsave("sporocysts3_top5genes_muscleclusts_waddedgenes_anno_jul5.pdf", width = 20, height = 25, units = c('cm'))
+
+```
+
+```{r}
+write.csv(x=dotplot_features, file="top5_markerz_roc_sporocysts3_jul5.csv")
+write.csv(x=dotplot_features, file=paste("dotplot_features_sporocysts3_", st, ".csv", sep = ""))
+
+```
+
+```{r}
+sporocysts3 <- RenameIdents(object = sporocysts3, 
+                               "Muscle" = "Muscle",
+                               "Neuron" = "Neuron",
+                               "Parenchymal" = "Parenchyma",
+                               "Stem/germinal" = "Stem/germinal",
+                               "Tegument 1" = "Tegument 1",
+                               "Tegument 2" = "Tegument 2")
+
+```
+
+Add custom colour palette
+```{r}
+new_pal <- c("#ffb703","#007aaa","#107E7D","#c40c18","#fb8500","#7851a9","#00325b","#452e60","#c4b7cb")
+plot1 <- DimPlot(sporocysts3, reduction = "umap", label = FALSE, repel = TRUE, label.box = FALSE) + NoLegend() +scale_color_manual(values = new_pal)
+LabelClusters(plot1, id = "ident", color = 'black', size =4, repel = T,  box.padding = 1.75)
+ggsave("fancyumapMar23.pdf", width = 15, height = 12, units = c('cm'))
+```
+
+
+```{r}
+features <- gsub('\\_', '-', dotplot_features$gene) #replace dashes with underscores
+features <- append(features, "Smp-318890")
+
+dp1 <- DotPlot(object = sporocysts3, features = unique(features)) + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+ scale_color_viridis(discrete = FALSE)
+dp1
+ggsave("sporocysts3_top5genes_mar23.pdf", width = 25, height = 14, units = c('cm'))
+
+```
+
