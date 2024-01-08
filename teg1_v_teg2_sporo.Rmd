@@ -37,7 +37,7 @@ table(sporocysts3@active.ident)
 ```
 
 ```{r}
-sporocysts3.markers_roc_annotate <- read.csv("/Users/ta13/R_tutorials/sporocysts/sporocysts3.markers_roc_annotate_2022-07-18.csv", stringsAsFactors = FALSE, header = TRUE) #import the marker data from somule papaer
+sporocysts3.markers_roc_annotate <- read.csv("/Users/ta13/R_tutorials/sporocysts/sporocysts3.markers_roc_annotate_2022-07-18.csv", stringsAsFactors = FALSE, header = TRUE) #import the marker data
 ```
 
 Import annotation information
@@ -47,12 +47,12 @@ v9_genelist$X <- NULL
 ```
 
 ```{r}
-stem.response <- FindMarkers(sporocysts3, ident.1 = "Tegument 1", ident.2 = "Tegument 2", verbose = TRUE, min.pct=0.0, logfc.threshold=0.0)
-head(stem.response, n = 15)
-stem.response <- tibble::rownames_to_column(stem.response, "gene")
-stem.response$gene <- gsub('\\-', '_', stem.response$gene) #replace dashes in geneid with underscores
-stem.response <- stem.response %>% left_join(v9_genelist, by = c("gene" = "Name")) #check the top 5 marker genes are also in the somule paper
-write.csv(x=stem.response, file="sporocysts3_teg1Vteg2.csv") #save this as a csv
+teg.response <- FindMarkers(sporocysts3, ident.1 = "Tegument 1", ident.2 = "Tegument 2", verbose = TRUE, min.pct=0.0, logfc.threshold=0.0)
+head(teg.response, n = 15)
+teg.response <- tibble::rownames_to_column(teg.response, "gene")
+teg.response$gene <- gsub('\\-', '_', teg.response$gene) #replace dashes in geneid with underscores
+teg.response <- teg.response %>% left_join(v9_genelist, by = c("gene" = "Name"))
+write.csv(x=teg.response, file="sporocysts3_teg1Vteg2.csv") #save this as a csv
 ```
 
 ```{r}
@@ -61,14 +61,14 @@ LabelClusters(plot1, id = "ident", color = 'black', size =4, repel = T,  box.pad
 ggsave(paste("sporocysts3-teg-DE-Smp-328760-labels-",st, ".pdf", sep = ""), width = 25, height = 15, units = c('cm'))
 ```
 
-I have split this file, so one has all the DEGs from delta/phi, and one has all the degs from kappa
+I have split this file, so one has all the DEGs from teg 1, and one has all the degs from teg 2
 
-Import the stem 1 DEGs
+Import the teg 1 DEGs
 ```{r}
 teg1_deg <- read.csv("/Users/ta13/R_tutorials/sporocysts/sporocysts3_upin_teg1.csv", stringsAsFactors = FALSE, header = TRUE) 
 ```
 
-Import the stem 1 DEGs
+Import the teg 2 DEGs
 ```{r}
 teg2_deg <- read.csv("/Users/ta13/R_tutorials/sporocysts/sporocysts3_upin_teg2.csv", stringsAsFactors = FALSE, header = TRUE) 
 ```
@@ -141,7 +141,7 @@ Rscript TopGO_mira.R teg2_deg_Markers_justgenes_2023-10-11.txt MF
 
 Import the summary file
 ```{r}
-topGO_summary_teg <- read.csv("/Users/ta13/R_tutorials/sporocysts/topGO_summary_sporos_teg_DE_withCC.csv", stringsAsFactors = FALSE, header = TRUE) #import the marker data from somule papaer
+topGO_summary_teg <- read.csv("/Users/ta13/R_tutorials/sporocysts/topGO_summary_sporos_teg_DE_withCC.csv", stringsAsFactors = FALSE, header = TRUE)
 ```
 
 ```{r}
